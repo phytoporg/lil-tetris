@@ -20,7 +20,7 @@
 #define GRID_CELL_WIDTH 20
 #define GRID_CELL_HEIGHT 20
 
-#define SPAWN_DELAY_FRAMES 60
+#define SPAWN_DELAY_FRAMES 40
 
 #define START_DROP_SPEED 8
 
@@ -90,7 +90,7 @@ static Color g_CellColors[(int)CELL_MAX_VALUE] = {
 };
 static Pattern g_PatternLUT[(int)CELL_MAX_VALUE];
 
-CellType_t GetNextCellType()
+CellType_t randomCellType()
 {
     return (CellType_t)(rand() % (int)(CELL_MAX_VALUE - 1) + 1);
 }
@@ -109,8 +109,8 @@ void initializePatternLUT()
 
 void initializeGameState()
 {
-    g_GameState.nextCellType = GetNextCellType();
-    g_GameState.currentCellType = GetNextCellType();
+    g_GameState.nextCellType = randomCellType();
+    g_GameState.currentCellType = randomCellType();
     g_GameState.patternGridX = 
         (GRID_WIDTH / 2) - 
         (g_PatternLUT[g_GameState.currentCellType].cols / 2);
@@ -131,11 +131,13 @@ bool currentPatternCollides()
                 Uint8 gridX = x + g_GameState.patternGridX;
                 Uint8 gridY = y + g_GameState.patternGridY;
 
+                // Collides with bottom?
                 if (gridY + 1 >= GRID_HEIGHT)
                 {
                     return true;
                 }
 
+                // Collides with committed cells?
                 if (g_Grid[gridY + 1][gridX].cellType != CELL_EMPTY)
                 {
                     return true;
@@ -147,14 +149,37 @@ bool currentPatternCollides()
     return false;
 }
 
+void commitAndSpawnPattern()
+{
+    Pattern* pPattern = &g_PatternLUT[g_GameState.currentCellType];
+    for (int y = 0; y < pPattern->rows; ++y) {
+        for (int x = 0; x < pPattern->cols; ++x) {
+            if (pPattern->occupancy[y][x])
+            {
+                Uint8 gridX = x + g_GameState.patternGridX;
+                Uint8 gridY = y + g_GameState.patternGridY;
+                g_Grid[gridY][gridX].cellType = g_GameState.currentCellType;
+            }
+        }
+    }
+
+    g_GameState.currentCellType = g_GameState.nextCellType;
+    g_GameState.nextCellType = randomCellType();
+    g_GameState.patternGridX = 
+        (GRID_WIDTH / 2) - 
+        (g_PatternLUT[g_GameState.currentCellType].cols / 2);
+    g_GameState.patternGridY = 0;
+
+    g_GameState.lastSpawnFrame = g_GameState.currentFrame;
+}
+
 void updateGameState()
 {
     Uint64 sinceLastDrop = g_GameState.currentFrame - g_GameState.lastDropFrame;
+    Uint64 sinceLastSpawn = g_GameState.currentFrame - g_GameState.lastSpawnFrame;
     Uint64 dropFrameTarget = (FPS / g_GameState.dropSpeed);
-    Pattern* pPattern = &g_PatternLUT[g_GameState.currentCellType];
 
-    Uint8 patternBottomY = g_GameState.patternGridY + pPattern->rows;
-    if (dropFrameTarget <= sinceLastDrop)
+    if (dropFrameTarget <= sinceLastDrop && sinceLastSpawn >= SPAWN_DELAY_FRAMES)
     {
         if (!currentPatternCollides())
         {
@@ -162,24 +187,7 @@ void updateGameState()
         }
         else
         {
-            // Commit this pattern and spawn a new one
-            for (int y = 0; y < pPattern->rows; ++y) {
-                for (int x = 0; x < pPattern->cols; ++x) {
-                    if (pPattern->occupancy[y][x])
-                    {
-                        Uint8 gridX = x + g_GameState.patternGridX;
-                        Uint8 gridY = y + g_GameState.patternGridY;
-                        g_Grid[gridY][gridX].cellType = g_GameState.currentCellType;
-                    }
-                }
-            }
-
-            g_GameState.currentCellType = g_GameState.nextCellType;
-            g_GameState.nextCellType = GetNextCellType();
-            g_GameState.patternGridX = 
-                (GRID_WIDTH / 2) - 
-                (g_PatternLUT[g_GameState.currentCellType].cols / 2);
-            g_GameState.patternGridY = 0;
+            commitAndSpawnPattern();
         }
 
         g_GameState.lastDropFrame = g_GameState.currentFrame;
@@ -204,6 +212,13 @@ void initializeGrid()
 
 void renderPattern(SDL_Renderer* pRenderer)
 {
+    // Don't render the current pattern if we're still waiting to spawn
+    Uint64 sinceLastSpawn = g_GameState.currentFrame - g_GameState.lastSpawnFrame;
+    if (sinceLastSpawn < SPAWN_DELAY_FRAMES && g_GameState.lastSpawnFrame > 0)
+    {
+        return;
+    }
+
     CellType_t cellType = g_GameState.currentCellType;
     Pattern* pPattern = &g_PatternLUT[cellType];
 
@@ -224,11 +239,6 @@ void renderPattern(SDL_Renderer* pRenderer)
         }
     }
 
-    // fprintf(stdout, "index = %d", toDrawIndex);
-    if (toDrawIndex != 4)
-    {
-        fprintf(stderr, "CurrentType = %d", cellType);
-    }
     assert(toDrawIndex == 4);
     Color* pColor = &g_CellColors[g_GameState.currentCellType];
     SDL_SetRenderDrawColor(
