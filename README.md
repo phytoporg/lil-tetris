@@ -1,2 +1,2 @@
 # lil-tetris
-An attempt to implement tetris, minimally, in C
+An attempt to speed-run a Tetris implementation in C without overthinking code organization and structure.
