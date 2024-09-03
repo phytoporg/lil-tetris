@@ -15,7 +15,6 @@ typedef struct {
     Uint8 occupancy[4][4];
     Uint8 rows;
     Uint8 cols;
-    Uint8 colOffset;
 } Pattern;
 
 #define PATTERN_ROTATION_COUNT(PatternRotations) \
@@ -29,7 +28,6 @@ static Pattern EmptyPattern = {
       { 0, 0, 0, 0} },
     0,
     0,
-    0
 };
 static Pattern* EmptyPatternRotations[1] = {
     &EmptyPattern
@@ -43,7 +41,6 @@ static Pattern LPatternLeft = {
       { 0, 0, 0, 0} },
     2,
     3,
-    0
 };
 
 static Pattern LPatternLeft_Rot90 = {
@@ -53,7 +50,6 @@ static Pattern LPatternLeft_Rot90 = {
       { 0, 0, 0, 0} },
     3,
     2,
-    0
 };
 
 static Pattern LPatternLeft_Rot180 = {
@@ -63,7 +59,6 @@ static Pattern LPatternLeft_Rot180 = {
       { 0, 0, 0, 0} },
     2,
     3,
-    0
 };
 
 static Pattern LPatternLeft_Rot270 = {
@@ -73,7 +68,6 @@ static Pattern LPatternLeft_Rot270 = {
       { 0, 0, 0, 0} },
     3,
     2,
-    0
 };
 
 static Pattern* LPatternLeftRotations[4] = {
@@ -90,7 +84,6 @@ static Pattern LPatternRight = {
       { 0, 0, 0, 0} },
     2,
     3,
-    0
 };
 
 static Pattern LPatternRight_Rot90 = {
@@ -100,7 +93,6 @@ static Pattern LPatternRight_Rot90 = {
       { 0, 0, 0, 0} },
     3,
     2,
-    0
 };
 
 static Pattern LPatternRight_Rot180 = {
@@ -110,7 +102,6 @@ static Pattern LPatternRight_Rot180 = {
       { 0, 0, 0, 0} },
     2,
     3,
-    0
 };
 
 static Pattern LPatternRight_Rot270 = {
@@ -120,7 +111,6 @@ static Pattern LPatternRight_Rot270 = {
       { 0, 0, 0, 0} },
     3,
     2,
-    0
 };
 
 static Pattern* LPatternRightRotations[4] = {
@@ -137,7 +127,6 @@ static Pattern ZPatternLeft = {
       { 0, 0, 0, 0} },
     2,
     3,
-    0
 };
 
 static Pattern ZPatternLeft_Rot90 = {
@@ -147,7 +136,6 @@ static Pattern ZPatternLeft_Rot90 = {
       { 0, 0, 0, 0} },
     3,
     2,
-    0
 };
 static Pattern* ZPatternLeftRotations[2] = {
     &ZPatternLeft,
@@ -161,7 +149,6 @@ static Pattern ZPatternRight = {
       { 0, 0, 0, 0} },
     2,
     3,
-    0
 };
 
 static Pattern ZPatternRight_Rot90 = {
@@ -171,7 +158,6 @@ static Pattern ZPatternRight_Rot90 = {
       { 0, 0, 0, 0} },
     3,
     2,
-    0
 };
 static Pattern* ZPatternRightRotations[2] = {
     &ZPatternRight,
@@ -185,7 +171,6 @@ static Pattern TPattern = {
       { 0, 0, 0, 0} },
     2,
     3,
-    0
 };
 
 static Pattern TPattern_Rot90 = {
@@ -195,7 +180,6 @@ static Pattern TPattern_Rot90 = {
       { 0, 0, 0, 0} },
     3,
     3,
-    1
 };
 
 static Pattern TPattern_Rot180 = {
@@ -205,7 +189,6 @@ static Pattern TPattern_Rot180 = {
       { 0, 0, 0, 0} },
     3,
     3,
-    0
 };
 
 static Pattern TPattern_Rot270 = {
@@ -215,7 +198,6 @@ static Pattern TPattern_Rot270 = {
       { 0, 0, 0, 0} },
     3,
     3,
-    0
 };
 
 static Pattern* TPatternRotations[4] = {
@@ -232,7 +214,6 @@ static Pattern LinePattern = {
       { 0, 0, 0, 0} },
     1,
     4,
-    0
 };
 
 static Pattern LinePattern_Rot90 = {
@@ -242,7 +223,6 @@ static Pattern LinePattern_Rot90 = {
       { 1, 0, 0, 0} },
     4,
     1,
-    0
 };
 static Pattern* LinePatternRotations[2] = {
     &LinePattern,
@@ -256,7 +236,6 @@ static Pattern SquarePattern = {
       { 0, 0, 0, 0} },
     2,
     2,
-    0
 };
 static Pattern* SquarePatternRotations[1] = {
     &SquarePattern,
