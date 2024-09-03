@@ -21,8 +21,10 @@
 #define GRID_CELL_HEIGHT 20
 
 #define SPAWN_DELAY_FRAMES 40
+#define CLEAR_LINES_FRAMES 60
+#define CLEAR_LINES_FLASH_DURATION 10
 
-#define START_DROP_SPEED 8
+#define START_DROP_SPEED 2
 
 // Types
 typedef struct
@@ -60,12 +62,15 @@ typedef struct
     Uint64     lastDropFrame;
     Uint64     lastSpawnFrame;
     Uint8      dropSpeed;
+    Sint8      clearLines[4];
+    Uint64     clearLinesFrame;
     bool       inputLeftPressed;
     bool       inputRightPressed;
     bool       inputDownPressed;
     bool       inputUpPressed;
     bool       inputRotateRightPressed;
     bool       inputRotateLeftPressed;
+    bool       toggleFlash;
 } GameState;
 
 // Globals
@@ -121,6 +126,9 @@ void initializeGameState()
     g_GameState.lastDropFrame = 0;
     g_GameState.lastSpawnFrame = 0;
     g_GameState.dropSpeed = START_DROP_SPEED; // Drops per second
+    memset(g_GameState.clearLines, -1, sizeof(g_GameState.clearLines));
+    g_GameState.clearLinesFrame = 0;
+    g_GameState.toggleFlash = false;
 
     resetInputStates();
 }
@@ -131,9 +139,8 @@ Pattern* getCurrentPattern()
         g_PatternLUT[g_GameState.currentPatternType][g_GameState.currentPatternRotation];
 }
 
-bool currentPatternCollides(Sint8 dX, Sint8 dY)
+bool patternCollides(Pattern* pPattern, Sint8 dX, Sint8 dY)
 {
-    Pattern* pPattern = getCurrentPattern();
     for (int y = 0; y < pPattern->rows; ++y) {
         for (int x = 0; x < pPattern->cols; ++x) {
             if (pPattern->occupancy[y][x])
@@ -209,9 +216,88 @@ void updateGameState()
         return;
     }
 
-    if (dropFrameTarget <= sinceLastDrop)
+    const bool ClearingLines = g_GameState.clearLines[0] >= 0;
+    if (ClearingLines)
     {
-        if (!currentPatternCollides(0, 1))
+        Uint64 sinceClearedLines = g_GameState.currentFrame - g_GameState.clearLinesFrame;
+        if (sinceClearedLines >= CLEAR_LINES_FRAMES)
+        {
+            // Nuke out the cleared lines
+            for (int i = 0; i < 4; ++i)
+            {
+                Sint8 y = g_GameState.clearLines[i];
+                if (y < 0)
+                {
+                    break;
+                }
+
+                for (int x = 0; x < GRID_WIDTH; ++x)
+                {
+                    g_Grid[y][x].patternType = PATTERN_NONE;
+                }
+            }
+
+            // Collapse the cleared lines
+            Sint8 lastNonClearY = -1;
+            Sint8 lastClearY = -1;
+            for (int y = 0; y < GRID_HEIGHT; ++y)
+            {
+                // Is the current line clear?
+                bool isClear = true;
+                for (int x = 0; x < GRID_WIDTH; ++x)
+                {
+                    if (g_Grid[y][x].patternType != PATTERN_NONE)
+                    {
+                        isClear = false;
+                        break;
+                    }
+                }
+
+                if (!isClear || y == (GRID_HEIGHT - 1))
+                {
+                    if (y == (GRID_HEIGHT - 1))
+                    {
+                        // Treat the last line as the last clear Y
+                        lastClearY = y;
+                    }
+
+                    // If this line isn't clear, and the previous line is, we may have
+                    // non-clear lines to copy across a gap of clear lines
+                    if (lastClearY == y - 1 && lastNonClearY >= 0 || y == (GRID_HEIGHT - 1))
+                    {
+                        Sint8 src = lastNonClearY;
+                        Sint8 dst = lastClearY;
+
+                        while(src >= 0) 
+                        {
+                            // Copy src line to dst line
+                            for (int x = 0; x < GRID_WIDTH; ++x)
+                            {
+                                g_Grid[dst][x].patternType = g_Grid[src][x].patternType;
+                            }
+                            --src;
+                            --dst;
+                        }
+                    }
+                    lastNonClearY = y;
+                }
+                else
+                {
+                    lastClearY = y;
+                }
+            }
+
+            memset(g_GameState.clearLines, -1, sizeof(g_GameState.clearLines));
+        }
+
+        g_GameState.currentFrame++;
+        return;
+    }
+
+    // Check for natural drops, player-induced drops or quick drops
+    if (dropFrameTarget <= sinceLastDrop || g_GameState.inputDownPressed)
+    {
+        if (!patternCollides(getCurrentPattern(), 0, 1))
         {
             g_GameState.patternGridY++;
         }
@@ -226,7 +312,7 @@ void updateGameState()
     {
         // Figure out how far to drop the current pattern
         int patternHeight = 1;
-        while (!currentPatternCollides(0, patternHeight))
+        while (!patternCollides(getCurrentPattern(), 0, patternHeight))
         {
             ++patternHeight;
         }
@@ -237,36 +323,78 @@ void updateGameState()
         g_GameState.lastDropFrame = g_GameState.currentFrame;
     }
 
+    // Checking cleared lines or lose condition if there was a drop
+    if (g_GameState.lastDropFrame == g_GameState.currentFrame)
+    {
+        // TODO: check for losing condition
+        
+        memset(g_GameState.clearLines, -1, sizeof(g_GameState.clearLines));
+
+        // Check for cleared lines
+        Uint8 linesCleared = 0;
+        for (int y = 0; y < GRID_HEIGHT; ++y) {
+            bool lineCleared = true;
+            for (int x = 0; x < GRID_WIDTH; ++x) {
+                if (g_Grid[y][x].patternType == PATTERN_NONE)
+                {
+                    lineCleared = false;
+                    break;
+                }
+            }
+
+            if (lineCleared)
+            {
+                g_GameState.clearLines[linesCleared] = y;
+                ++linesCleared;
+            }
+        }
+
+        if (linesCleared > 0)
+        {
+            g_GameState.clearLinesFrame = g_GameState.currentFrame;
+        }
+    }
+
+    // Handle player inputs
     Pattern* pPattern = getCurrentPattern();
     if (g_GameState.inputLeftPressed && !g_GameState.inputRightPressed)
     {
-        if (!currentPatternCollides(-1, 0))
+        if (!patternCollides(getCurrentPattern(), -1, 0))
         {
             g_GameState.patternGridX--;
         }
     }
     else if (g_GameState.inputRightPressed && !g_GameState.inputLeftPressed)
     {
-        if (!currentPatternCollides(1, 0))
+        if (!patternCollides(getCurrentPattern(), 1, 0))
         {
             g_GameState.patternGridX++;
         }
     }
     
-    // TODO: rotatedPatternCollides()
     if (g_GameState.inputRotateRightPressed && !g_GameState.inputRotateLeftPressed)
     {
         int numRotations = PatternNumRotations[g_GameState.currentPatternType];
-        g_GameState.currentPatternRotation =
-            (g_GameState.currentPatternRotation + 1) % numRotations;
+        int rotationIndex = (g_GameState.currentPatternRotation + 1) % numRotations;
+
+        Pattern* pRotatedPattern = g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
+        if (!patternCollides(pRotatedPattern, 0, 0))
+        {
+            g_GameState.currentPatternRotation = rotationIndex;
+        }
     }
     else if (g_GameState.inputRotateLeftPressed && !g_GameState.inputRotateRightPressed)
     {
         int numRotations = PatternNumRotations[g_GameState.currentPatternType];
-        g_GameState.currentPatternRotation = 
+        int rotationIndex = 
             !g_GameState.currentPatternRotation ? 
                 numRotations : 
                 g_GameState.currentPatternRotation - 1;
+        Pattern* pRotatedPattern = g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
+        if (!patternCollides(pRotatedPattern, 0, 0))
+        {
+            g_GameState.currentPatternRotation = rotationIndex;
+        }
     }
 
     g_GameState.currentFrame++;
@@ -367,6 +495,51 @@ void renderGrid(SDL_Renderer* pRenderer)
 
         SDLRectArray* pArray = &g_RectArrays.RectArrays[rectType];
         SDL_RenderFillRects(pRenderer, pArray->Rects, pArray->NumRects);
+    }
+
+    // Render flashing lines if we're clearing lines
+    const bool ClearingLines = g_GameState.clearLines[0] >= 0;
+    Uint64 sinceClearedLines = g_GameState.currentFrame - g_GameState.clearLinesFrame;
+    if (sinceClearedLines < CLEAR_LINES_FRAMES)
+    {
+        if ((sinceClearedLines % CLEAR_LINES_FLASH_DURATION) == 0)
+        {
+            g_GameState.toggleFlash = g_GameState.toggleFlash ? false : true;
+        }
+
+        if (g_GameState.toggleFlash)
+        {
+            // At most we have GRID_WIDTH * 4 rects to render
+            SDL_Rect FlashRects[GRID_WIDTH * 4];
+            int rectIndex = 0;
+            int clearLineIndex = 0;
+            int y = g_GameState.clearLines[clearLineIndex];
+            while (y >= 0)
+            {
+                for (int x = 0; x < GRID_WIDTH; ++x)
+                {
+                    GridCell* pCell = &g_Grid[y][x];
+                    SDL_Rect* pRect = &FlashRects[rectIndex];
+                    pRect->x = pCell->x * GRID_CELL_WIDTH + GRID_UPPER_X;
+                    pRect->y = pCell->y * GRID_CELL_HEIGHT + GRID_UPPER_Y;
+                    pRect->w = GRID_CELL_WIDTH;
+                    pRect->h = GRID_CELL_HEIGHT;
+                    ++rectIndex;
+                }
+                clearLineIndex++;
+                y = g_GameState.clearLines[clearLineIndex];
+            }
+
+            Color white = { 255, 255, 255 };
+            SDL_SetRenderDrawColor(
+                pRenderer,
+                white.r,
+                white.g,
+                white.b,
+                SDL_ALPHA_OPAQUE);
+
+            SDL_RenderFillRects(pRenderer, FlashRects, rectIndex);
+        }
     }
 }
 
