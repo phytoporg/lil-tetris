@@ -66,7 +66,7 @@ typedef struct
     Uint64     lastDropFrame;
     Uint64     lastSpawnFrame;
     Uint8      dropSpeed;
-    Sint8      clearLines[4];
+    Sint8      clearLines[GRID_HEIGHT];
     Uint64     clearLinesFrame;
     bool       inputLeftPressed;
     bool       inputRightPressed;
@@ -227,7 +227,7 @@ void updateGameState()
         if (sinceClearedLines >= CLEAR_LINES_FRAMES)
         {
             // Nuke out the cleared lines
-            for (int i = 0; i < 4; ++i)
+            for (int i = 0; i < sizeof(g_GameState.clearLines); ++i)
             {
                 Sint8 y = g_GameState.clearLines[i];
                 if (y < 0)
@@ -330,7 +330,23 @@ void updateGameState()
     // Checking cleared lines or lose condition if there was a drop
     if (g_GameState.lastDropFrame == g_GameState.currentFrame)
     {
-        // TODO: check for losing condition
+        if (g_GameState.lastSpawnFrame == g_GameState.currentFrame)
+        {
+            // TODO: Check losing condition
+            Pattern* pNextPattern = g_PatternLUT[g_GameState.nextPatternType][0];
+            if (patternCollides(pNextPattern, 0, 0))
+            {
+                // Just clear all lines on lose
+                for (Uint8 y = 0; y < GRID_HEIGHT; ++y)
+                {
+                    g_GameState.clearLines[y] = y;
+                }
+
+                g_GameState.clearLinesFrame = g_GameState.currentFrame;
+                g_GameState.currentFrame++;
+                return;
+            }
+        }
         
         memset(g_GameState.clearLines, -1, sizeof(g_GameState.clearLines));
 
@@ -391,8 +407,8 @@ void updateGameState()
     {
         int numRotations = PatternNumRotations[g_GameState.currentPatternType];
         int rotationIndex = 
-            !g_GameState.currentPatternRotation ? 
-                numRotations : 
+            g_GameState.currentPatternRotation == 0 ? 
+                numRotations - 1 : 
                 g_GameState.currentPatternRotation - 1;
         Pattern* pRotatedPattern = g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
         if (!patternCollides(pRotatedPattern, 0, 0))
@@ -566,12 +582,11 @@ void renderGrid(SDL_Renderer* pRenderer)
 
         if (g_GameState.toggleFlash)
         {
-            // At most we have GRID_WIDTH * 4 rects to render
-            SDL_Rect FlashRects[GRID_WIDTH * 4];
+            SDL_Rect FlashRects[GRID_WIDTH * sizeof(g_GameState.clearLines)];
             int rectIndex = 0;
             int clearLineIndex = 0;
             int y = g_GameState.clearLines[clearLineIndex];
-            while (y >= 0)
+            while (y >= 0 && clearLineIndex < sizeof(g_GameState.clearLines))
             {
                 for (int x = 0; x < GRID_WIDTH; ++x)
                 {
@@ -691,7 +706,7 @@ int main(int argc, char** argv)
                 }
                 else if (event.key.keysym.sym == SDLK_j)
                 {
-                    g_GameState.inputRotateRightPressed = true;
+                    g_GameState.inputRotateLeftPressed = true;
                 }
             }
         }
