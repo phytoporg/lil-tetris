@@ -20,6 +20,10 @@
 #define GRID_CELL_WIDTH 20
 #define GRID_CELL_HEIGHT 20
 
+#define NEXT_PATTERN_X 500
+#define NEXT_PATTERN_Y 100
+#define NEXT_PATTERN_BORDER 5
+
 #define SPAWN_DELAY_FRAMES 40
 #define CLEAR_LINES_FRAMES 60
 #define CLEAR_LINES_FLASH_DURATION 10
@@ -455,6 +459,59 @@ void renderPattern(SDL_Renderer* pRenderer)
     SDL_RenderFillRects(pRenderer, toDraw, toDrawIndex);
 }
 
+void renderNextPattern(SDL_Renderer* pRenderer)
+{
+    PatternType_t patternType = g_GameState.nextPatternType;
+    Pattern* pPattern = g_PatternLUT[g_GameState.nextPatternType][0];
+
+    // Draw the bg first
+    Color black = { 0, 0, 0 };
+    SDL_Rect previewBgRect;
+    previewBgRect.x = NEXT_PATTERN_X - NEXT_PATTERN_BORDER;
+    previewBgRect.y = NEXT_PATTERN_Y - NEXT_PATTERN_BORDER;
+    previewBgRect.w = NEXT_PATTERN_BORDER * 2 + 4 * GRID_CELL_WIDTH;
+    previewBgRect.h = NEXT_PATTERN_BORDER * 2 + 4 * GRID_CELL_HEIGHT;
+
+    SDL_SetRenderDrawColor(
+        pRenderer,
+        black.r,
+        black.g,
+        black.b,
+        SDL_ALPHA_OPAQUE);
+    SDL_RenderFillRect(pRenderer, &previewBgRect);
+
+    // Now draw the pattern
+    int offsetX = ((4 - pPattern->cols) * GRID_CELL_WIDTH) / 2;
+    int offsetY = ((4 - pPattern->rows) * GRID_CELL_HEIGHT) / 2;
+    
+    int toDrawIndex = 0;
+    SDL_Rect toDraw[4];
+    for (int y = 0; y < pPattern->rows; ++y) {
+        for (int x = 0; x < pPattern->cols; ++x) {
+            if (pPattern->occupancy[y][x])
+            {
+                SDL_Rect* pRect = &toDraw[toDrawIndex];
+                pRect->x = x * GRID_CELL_WIDTH + NEXT_PATTERN_X + offsetX;
+                pRect->y = y * GRID_CELL_HEIGHT + NEXT_PATTERN_Y + offsetY;
+                pRect->w = GRID_CELL_WIDTH;
+                pRect->h = GRID_CELL_HEIGHT;
+
+                ++toDrawIndex;
+            }
+        }
+    }
+
+    assert(toDrawIndex == 4);
+    Color* pColor = &g_CellColors[g_GameState.nextPatternType];
+    SDL_SetRenderDrawColor(
+        pRenderer,
+        pColor->r,
+        pColor->g,
+        pColor->b,
+        SDL_ALPHA_OPAQUE);
+    SDL_RenderFillRects(pRenderer, toDraw, toDrawIndex);
+}
+
 void renderGrid(SDL_Renderer* pRenderer) 
 {
     // Reset the rect array rect counts
@@ -645,6 +702,7 @@ int main(int argc, char** argv)
         updateGameState();
         renderGrid(pRender);
         renderPattern(pRender);
+        renderNextPattern(pRender);
 
         Uint64 endTime = SDL_GetPerformanceCounter();
 
