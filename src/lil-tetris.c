@@ -25,19 +25,6 @@
 #define START_DROP_SPEED 8
 
 // Types
-typedef enum
-{
-    CELL_EMPTY,
-    CELL_L_SHAPE_L,
-    CELL_L_SHAPE_R,
-    CELL_Z_SHAPE_L,
-    CELL_Z_SHAPE_R,
-    CELL_T_SHAPE,
-    CELL_LINE_SHAPE,
-    CELL_SQUARE_SHAPE,
-    CELL_MAX_VALUE
-} CellType_t;
-
 typedef struct
 {
     Uint8 r, g, b;
@@ -47,7 +34,7 @@ typedef struct
 {
     Uint8      x;
     Uint8      y;
-    CellType_t cellType;
+    PatternType_t patternType;
 } GridCell;
 
 typedef struct
@@ -59,86 +46,121 @@ typedef struct
 typedef struct
 {
     // One for each cell type
-    SDLRectArray RectArrays[(int)CELL_MAX_VALUE];
+    SDLRectArray RectArrays[(int)PATTERN_MAX_VALUE];
 } SDLRectArrays;
 
 typedef struct
 {
-    CellType_t nextCellType;
-    CellType_t currentCellType;
+    PatternType_t nextPatternType;
+    PatternType_t currentPatternType;
     Uint8      patternGridX;
     Uint8      patternGridY;
+    Uint8      currentPatternRotation;
     Uint64     currentFrame;
     Uint64     lastDropFrame;
     Uint64     lastSpawnFrame;
     Uint8      dropSpeed;
+    bool       inputLeftPressed;
+    bool       inputRightPressed;
+    bool       inputDownPressed;
+    bool       inputUpPressed;
+    bool       inputRotateRightPressed;
+    bool       inputRotateLeftPressed;
 } GameState;
 
 // Globals
 static GameState g_GameState;
 static GridCell g_Grid[GRID_HEIGHT][GRID_WIDTH];
 static SDLRectArrays g_RectArrays;
-static Color g_CellColors[(int)CELL_MAX_VALUE] = {
-    { 0  ,   0,   0 }, // CELL_EMPTY,
-    { 100,  50,  50 }, // CELL_L_SHAPE_L,
-    { 100,  50,  50 }, // CELL_L_SHAPE_R,
-    { 150, 150,   0 }, // CELL_Z_SHAPE_L,
-    { 150, 150,   0 }, // CELL_Z_SHAPE_R,
-    { 150, 150, 100 }, // CELL_T_SHAPE,
-    { 200, 100, 100 }, // CELL_LINE_SHAPE,
-    {  50, 200, 250 }, // CELL_SQUARE_SHAPE,
+static Color g_CellColors[(int)PATTERN_MAX_VALUE] = {
+    { 0  ,   0,   0 }, // PATTERN_NONE,
+    { 100,  50,  50 }, // PATTERN_L_L,
+    { 100,  50,  50 }, // PATTERN_L_R,
+    { 150, 150,   0 }, // PATTERN_Z_L,
+    { 150, 150,   0 }, // PATTERN_Z_R,
+    { 150, 150, 100 }, // PATTERN_T_SHAPE,
+    { 200, 100, 100 }, // PATTERN_LINE_SHAPE,
+    {  50, 200, 250 }, // PATTERN_SQUARE_SHAPE,
 };
-static Pattern g_PatternLUT[(int)CELL_MAX_VALUE];
+static Pattern** g_PatternLUT[(int)PATTERN_MAX_VALUE] = {
+    EmptyPatternRotations,
+    LPatternLeftRotations,
+    LPatternRightRotations,
+    ZPatternLeftRotations,
+    ZPatternRightRotations,
+    TPatternRotations,
+    LinePatternRotations,
+    SquarePatternRotations,
+};
 
-CellType_t randomCellType()
+PatternType_t randomPatternType()
 {
-    return (CellType_t)(rand() % (int)(CELL_MAX_VALUE - 1) + 1);
+    return (PatternType_t)(rand() % (int)(PATTERN_MAX_VALUE - 1) + 1);
 }
 
-void initializePatternLUT()
+void resetInputStates()
 {
-    g_PatternLUT[CELL_EMPTY]        = EmptyPattern;
-    g_PatternLUT[CELL_L_SHAPE_L]    = LShapePatternLeft;
-    g_PatternLUT[CELL_L_SHAPE_R]    = LShapePatternRight;
-    g_PatternLUT[CELL_Z_SHAPE_L]    = ZShapePatternLeft;
-    g_PatternLUT[CELL_Z_SHAPE_R]    = ZShapePatternRight;
-    g_PatternLUT[CELL_T_SHAPE]      = TShapePattern;
-    g_PatternLUT[CELL_LINE_SHAPE]   = LineShapePattern;
-    g_PatternLUT[CELL_SQUARE_SHAPE] = SquareShapePattern;
+    g_GameState.inputLeftPressed = false;
+    g_GameState.inputRightPressed = false;
+    g_GameState.inputDownPressed = false;
+    g_GameState.inputUpPressed = false;
+    g_GameState.inputRotateRightPressed = false;
+    g_GameState.inputRotateLeftPressed = false;
 }
 
 void initializeGameState()
 {
-    g_GameState.nextCellType = randomCellType();
-    g_GameState.currentCellType = randomCellType();
+    g_GameState.nextPatternType = randomPatternType();
+    g_GameState.currentPatternType = randomPatternType();
+    g_GameState.currentPatternRotation = 0;
     g_GameState.patternGridX = 
         (GRID_WIDTH / 2) - 
-        (g_PatternLUT[g_GameState.currentCellType].cols / 2);
+        (g_PatternLUT[g_GameState.currentPatternType][0]->cols / 2);
     g_GameState.patternGridY = 0;
     g_GameState.currentFrame = 0;
     g_GameState.lastDropFrame = 0;
     g_GameState.lastSpawnFrame = 0;
     g_GameState.dropSpeed = START_DROP_SPEED; // Drops per second
+
+    resetInputStates();
 }
 
-bool currentPatternCollides()
+Pattern* getCurrentPattern()
 {
-    Pattern* pPattern = &g_PatternLUT[g_GameState.currentCellType];
+    return
+        g_PatternLUT[g_GameState.currentPatternType][g_GameState.currentPatternRotation];
+}
+
+bool currentPatternCollides(Sint8 dX, Sint8 dY)
+{
+    Pattern* pPattern = getCurrentPattern();
     for (int y = 0; y < pPattern->rows; ++y) {
         for (int x = 0; x < pPattern->cols; ++x) {
             if (pPattern->occupancy[y][x])
             {
-                Uint8 gridX = x + g_GameState.patternGridX;
-                Uint8 gridY = y + g_GameState.patternGridY;
+                Sint8 gridX = x + g_GameState.patternGridX + dX;
+                Sint8 gridY = y + g_GameState.patternGridY + dY;
 
                 // Collides with bottom?
-                if (gridY + 1 >= GRID_HEIGHT)
+                if (gridY >= GRID_HEIGHT)
+                {
+                    return true;
+                }
+
+                // Collides with left?
+                if (gridX < 0)
+                {
+                    return true;
+                }
+
+                // Collides with right?
+                if (gridX >= GRID_WIDTH)
                 {
                     return true;
                 }
 
                 // Collides with committed cells?
-                if (g_Grid[gridY + 1][gridX].cellType != CELL_EMPTY)
+                if (g_Grid[gridY][gridX].patternType != PATTERN_NONE)
                 {
                     return true;
                 }
@@ -151,23 +173,24 @@ bool currentPatternCollides()
 
 void commitAndSpawnPattern()
 {
-    Pattern* pPattern = &g_PatternLUT[g_GameState.currentCellType];
+    Pattern* pPattern = getCurrentPattern();
     for (int y = 0; y < pPattern->rows; ++y) {
         for (int x = 0; x < pPattern->cols; ++x) {
             if (pPattern->occupancy[y][x])
             {
                 Uint8 gridX = x + g_GameState.patternGridX;
                 Uint8 gridY = y + g_GameState.patternGridY;
-                g_Grid[gridY][gridX].cellType = g_GameState.currentCellType;
+                g_Grid[gridY][gridX].patternType = g_GameState.currentPatternType;
             }
         }
     }
 
-    g_GameState.currentCellType = g_GameState.nextCellType;
-    g_GameState.nextCellType = randomCellType();
+    g_GameState.currentPatternType = g_GameState.nextPatternType;
+    g_GameState.nextPatternType = randomPatternType();
+    g_GameState.currentPatternRotation = 0;
     g_GameState.patternGridX = 
         (GRID_WIDTH / 2) - 
-        (g_PatternLUT[g_GameState.currentCellType].cols / 2);
+        (getCurrentPattern()->cols / 2);
     g_GameState.patternGridY = 0;
 
     g_GameState.lastSpawnFrame = g_GameState.currentFrame;
@@ -179,9 +202,16 @@ void updateGameState()
     Uint64 sinceLastSpawn = g_GameState.currentFrame - g_GameState.lastSpawnFrame;
     Uint64 dropFrameTarget = (FPS / g_GameState.dropSpeed);
 
-    if (dropFrameTarget <= sinceLastDrop && sinceLastSpawn >= SPAWN_DELAY_FRAMES)
+    const bool WaitingForSpawn = sinceLastSpawn < SPAWN_DELAY_FRAMES;
+    if (WaitingForSpawn)
     {
-        if (!currentPatternCollides())
+        g_GameState.currentFrame++;
+        return;
+    }
+
+    if (dropFrameTarget <= sinceLastDrop)
+    {
+        if (!currentPatternCollides(0, 1))
         {
             g_GameState.patternGridY++;
         }
@@ -191,6 +221,52 @@ void updateGameState()
         }
 
         g_GameState.lastDropFrame = g_GameState.currentFrame;
+    }
+    else if (g_GameState.inputUpPressed)
+    {
+        // Figure out how far to drop the current pattern
+        int patternHeight = 1;
+        while (!currentPatternCollides(0, patternHeight))
+        {
+            ++patternHeight;
+        }
+
+        g_GameState.patternGridY += patternHeight - 1;
+        commitAndSpawnPattern();
+
+        g_GameState.lastDropFrame = g_GameState.currentFrame;
+    }
+
+    Pattern* pPattern = getCurrentPattern();
+    if (g_GameState.inputLeftPressed && !g_GameState.inputRightPressed)
+    {
+        if (!currentPatternCollides(-1, 0))
+        {
+            g_GameState.patternGridX--;
+        }
+    }
+    else if (g_GameState.inputRightPressed && !g_GameState.inputLeftPressed)
+    {
+        if (!currentPatternCollides(1, 0))
+        {
+            g_GameState.patternGridX++;
+        }
+    }
+    
+    // TODO: rotatedPatternCollides()
+    if (g_GameState.inputRotateRightPressed && !g_GameState.inputRotateLeftPressed)
+    {
+        int numRotations = PatternNumRotations[g_GameState.currentPatternType];
+        g_GameState.currentPatternRotation =
+            (g_GameState.currentPatternRotation + 1) % numRotations;
+    }
+    else if (g_GameState.inputRotateLeftPressed && !g_GameState.inputRotateRightPressed)
+    {
+        int numRotations = PatternNumRotations[g_GameState.currentPatternType];
+        g_GameState.currentPatternRotation = 
+            !g_GameState.currentPatternRotation ? 
+                numRotations : 
+                g_GameState.currentPatternRotation - 1;
     }
 
     g_GameState.currentFrame++;
@@ -204,7 +280,7 @@ void initializeGrid()
             GridCell* pCell = &g_Grid[y][x];
             pCell->x = x;
             pCell->y = y;
-            pCell->cellType = CELL_EMPTY;
+            pCell->patternType = PATTERN_NONE;
         }
     }
 
@@ -219,8 +295,8 @@ void renderPattern(SDL_Renderer* pRenderer)
         return;
     }
 
-    CellType_t cellType = g_GameState.currentCellType;
-    Pattern* pPattern = &g_PatternLUT[cellType];
+    PatternType_t patternType = g_GameState.currentPatternType;
+    Pattern* pPattern = getCurrentPattern();
 
     int toDrawIndex = 0;
     SDL_Rect toDraw[4];
@@ -240,7 +316,7 @@ void renderPattern(SDL_Renderer* pRenderer)
     }
 
     assert(toDrawIndex == 4);
-    Color* pColor = &g_CellColors[g_GameState.currentCellType];
+    Color* pColor = &g_CellColors[g_GameState.currentPatternType];
     SDL_SetRenderDrawColor(
         pRenderer,
         pColor->r,
@@ -254,7 +330,7 @@ void renderPattern(SDL_Renderer* pRenderer)
 void renderGrid(SDL_Renderer* pRenderer) 
 {
     // Reset the rect array rect counts
-    for (int rectType = 0; rectType < (int)CELL_MAX_VALUE; ++rectType) {
+    for (int rectType = 0; rectType < (int)PATTERN_MAX_VALUE; ++rectType) {
         SDLRectArray* pArray = &g_RectArrays.RectArrays[rectType];
         pArray->NumRects = 0;
     }
@@ -263,10 +339,10 @@ void renderGrid(SDL_Renderer* pRenderer)
     for (Uint8 y = 0; y < GRID_HEIGHT; ++y) {
         for (Uint8 x = 0; x < GRID_WIDTH; ++x) {
             GridCell* pCell = &g_Grid[y][x];
-            assert((int)pCell->cellType >= 0);
-            assert((int)pCell->cellType < CELL_MAX_VALUE);
+            assert((int)pCell->patternType >= 0);
+            assert((int)pCell->patternType < PATTERN_MAX_VALUE);
 
-            SDLRectArray* pRectArray = &g_RectArrays.RectArrays[pCell->cellType];
+            SDLRectArray* pRectArray = &g_RectArrays.RectArrays[pCell->patternType];
 
             int rectIndex = pRectArray->NumRects;
             SDL_Rect* pRect = &pRectArray->Rects[rectIndex];
@@ -280,7 +356,7 @@ void renderGrid(SDL_Renderer* pRenderer)
         }
     }
 
-    for (int rectType = 0; rectType < (int)CELL_MAX_VALUE; ++rectType) {
+    for (int rectType = 0; rectType < (int)PATTERN_MAX_VALUE; ++rectType) {
         Color* pColor = &g_CellColors[rectType];
         SDL_SetRenderDrawColor(
             pRenderer,
@@ -324,7 +400,6 @@ int main(int argc, char** argv)
 
     srand(time(NULL));
 
-    initializePatternLUT();
     initializeGameState();
     initializeGrid();
 
@@ -344,6 +419,8 @@ int main(int argc, char** argv)
             SDL_ALPHA_OPAQUE);
         SDL_RenderClear(pRender);
 
+        resetInputStates();
+
         SDL_Event event;
         while(SDL_PollEvent(&event) != 0)
         {
@@ -357,6 +434,34 @@ int main(int argc, char** argv)
                     event.key.keysym.sym == SDLK_q)
                 {
                     shouldQuit = true;
+                }
+                else if (event.key.keysym.sym == SDLK_w || 
+                         event.key.keysym.sym == SDLK_UP)
+                {
+                    g_GameState.inputUpPressed = true;
+                }
+                else if (event.key.keysym.sym == SDLK_s || 
+                         event.key.keysym.sym == SDLK_DOWN)
+                {
+                    g_GameState.inputDownPressed = true;
+                }
+                else if (event.key.keysym.sym == SDLK_a || 
+                         event.key.keysym.sym == SDLK_LEFT)
+                {
+                    g_GameState.inputLeftPressed = true;
+                }
+                else if (event.key.keysym.sym == SDLK_d || 
+                         event.key.keysym.sym == SDLK_RIGHT)
+                {
+                    g_GameState.inputRightPressed = true;
+                }
+                else if (event.key.keysym.sym == SDLK_k)
+                {
+                    g_GameState.inputRotateRightPressed = true;
+                }
+                else if (event.key.keysym.sym == SDLK_j)
+                {
+                    g_GameState.inputRotateRightPressed = true;
                 }
             }
         }
