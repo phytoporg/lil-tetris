@@ -1,14 +1,3 @@
-Minor refactor:
-- CellType_t -> PatternType_t
-- PatternType_t defined in patterns.c
-- Rotations and LUTs can then be handled in patterns.c
-- Handle left, right input
-- Handle piece rotations
-- Handle rotation collision checks
-- Handle quick drop input
-
-- Handle lose conditions
-- Handle line clears
-- Show next piece
 - Level progression
 - Visual polish
+- Music & SFX
