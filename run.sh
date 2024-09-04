@@ -1,3 +1,3 @@
 #!/usr/bin/bash
 
-./build/lil-tetris &
+./build/lil-tetris $(pwd)/assets &

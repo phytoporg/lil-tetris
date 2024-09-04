@@ -5,6 +5,7 @@
 #include <time.h>
 #include <assert.h>
 
+#include "lil-tetris-audio.c"
 #include "lil-tetris-patterns.c"
 
 // Constants
@@ -330,9 +331,9 @@ void updateGameState()
     // Checking cleared lines or lose condition if there was a drop
     if (g_GameState.lastDropFrame == g_GameState.currentFrame)
     {
+        // Check losing condition
         if (g_GameState.lastSpawnFrame == g_GameState.currentFrame)
         {
-            // TODO: Check losing condition
             Pattern* pNextPattern = g_PatternLUT[g_GameState.nextPatternType][0];
             if (patternCollides(pNextPattern, 0, 0))
             {
@@ -371,6 +372,7 @@ void updateGameState()
 
         if (linesCleared > 0)
         {
+            AudioPlayLineClear();
             g_GameState.clearLinesFrame = g_GameState.currentFrame;
         }
     }
@@ -619,7 +621,7 @@ int main(int argc, char** argv)
 {
     SDL_Window* pWindow = NULL;
 
-    if (SDL_Init(SDL_INIT_VIDEO) < 0)
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0)
     {
         fprintf(stderr, "Failed to initialize SDL2: %s\n", SDL_GetError());
         return -1;
@@ -640,6 +642,13 @@ int main(int argc, char** argv)
     if (!pRender)
     {
         fprintf(stderr, "Failed to create renderer: %s\n", SDL_GetError());
+        return -1;
+    }
+
+    char* pDefaultAssetRoot = ".";
+    if (!AudioInitialize((argc > 1 ? argv[1] : pDefaultAssetRoot)))
+    {
+        fprintf(stderr, "Did not initialize audio\n");
         return -1;
     }
 
@@ -665,6 +674,7 @@ int main(int argc, char** argv)
         SDL_RenderClear(pRender);
 
         resetInputStates();
+        AudioPlayMusic();
 
         SDL_Event event;
         while(SDL_PollEvent(&event) != 0)
@@ -728,6 +738,8 @@ int main(int argc, char** argv)
         SDL_RenderPresent(pRender);
         SDL_Delay(expectedMs - elapsedMs);
     }
+
+    AudioUninitialize();
 
     SDL_DestroyRenderer(pRender);
     SDL_DestroyWindow(pWindow);
