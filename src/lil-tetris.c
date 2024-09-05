@@ -7,6 +7,7 @@
 
 #include "lil-tetris-audio.c"
 #include "lil-tetris-patterns.c"
+#include "lil-tetris-themes.c"
 
 // Constants
 #define SCREEN_WIDTH 640
@@ -20,6 +21,7 @@
 #define GRID_UPPER_Y 50
 #define GRID_CELL_WIDTH 20
 #define GRID_CELL_HEIGHT 20
+#define GRID_CELL_BORDER 2
 
 #define NEXT_PATTERN_X 500
 #define NEXT_PATTERN_Y 100
@@ -32,11 +34,6 @@
 #define START_DROP_SPEED 2
 
 // Types
-typedef struct
-{
-    Uint8 r, g, b;
-} Color;
-
 typedef struct
 {
     Uint8      x;
@@ -82,16 +79,6 @@ typedef struct
 static GameState g_GameState;
 static GridCell g_Grid[GRID_HEIGHT][GRID_WIDTH];
 static SDLRectArrays g_RectArrays;
-static Color g_CellColors[(int)PATTERN_MAX_VALUE] = {
-    { 0  ,   0,   0 }, // PATTERN_NONE,
-    { 100,  50,  50 }, // PATTERN_L_L,
-    { 100,  50,  50 }, // PATTERN_L_R,
-    { 150, 150,   0 }, // PATTERN_Z_L,
-    { 150, 150,   0 }, // PATTERN_Z_R,
-    { 150, 150, 100 }, // PATTERN_T_SHAPE,
-    { 200, 100, 100 }, // PATTERN_LINE_SHAPE,
-    {  50, 200, 250 }, // PATTERN_SQUARE_SHAPE,
-};
 static Pattern** g_PatternLUT[(int)PATTERN_MAX_VALUE] = {
     EmptyPatternRotations,
     LPatternLeftRotations,
@@ -436,6 +423,43 @@ void initializeGrid()
 
 }
 
+void 
+renderCellArray(
+    SDL_Renderer* pRenderer,
+    PatternType_t patternType,
+    SDL_Rect* pRects,
+    int numRects)
+{
+    // Outer
+    Color* pOuterColor = ThemeGetOuterColor( g_DefaultThemes, (int)patternType);
+    SDL_SetRenderDrawColor(
+        pRenderer,
+        pOuterColor->r,
+        pOuterColor->g,
+        pOuterColor->b,
+        SDL_ALPHA_OPAQUE);
+    SDL_RenderFillRects(pRenderer, pRects, numRects);
+
+    // Inner
+    for (int i = 0; i < numRects; ++i)
+    {
+        SDL_Rect* pRect = &pRects[i];
+        pRect->x += GRID_CELL_BORDER;
+        pRect->y += GRID_CELL_BORDER;
+        pRect->w -= (GRID_CELL_BORDER * 2);
+        pRect->h -= (GRID_CELL_BORDER * 2);
+    }
+    
+    Color* pInnerColor = ThemeGetInnerColor( g_DefaultThemes, (int)patternType);
+    SDL_SetRenderDrawColor(
+        pRenderer,
+        pInnerColor->r,
+        pInnerColor->g,
+        pInnerColor->b,
+        SDL_ALPHA_OPAQUE);
+    SDL_RenderFillRects(pRenderer, pRects, numRects);
+}
+
 void renderPattern(SDL_Renderer* pRenderer)
 {
     // Don't render the current pattern if we're still waiting to spawn
@@ -466,15 +490,7 @@ void renderPattern(SDL_Renderer* pRenderer)
     }
 
     assert(toDrawIndex == 4);
-    Color* pColor = &g_CellColors[g_GameState.currentPatternType];
-    SDL_SetRenderDrawColor(
-        pRenderer,
-        pColor->r,
-        pColor->g,
-        pColor->b,
-        SDL_ALPHA_OPAQUE);
-
-    SDL_RenderFillRects(pRenderer, toDraw, toDrawIndex);
+    renderCellArray(pRenderer, g_GameState.currentPatternType, toDraw, toDrawIndex);
 }
 
 void renderNextPattern(SDL_Renderer* pRenderer)
@@ -520,14 +536,7 @@ void renderNextPattern(SDL_Renderer* pRenderer)
     }
 
     assert(toDrawIndex == 4);
-    Color* pColor = &g_CellColors[g_GameState.nextPatternType];
-    SDL_SetRenderDrawColor(
-        pRenderer,
-        pColor->r,
-        pColor->g,
-        pColor->b,
-        SDL_ALPHA_OPAQUE);
-    SDL_RenderFillRects(pRenderer, toDraw, toDrawIndex);
+    renderCellArray(pRenderer, g_GameState.nextPatternType, toDraw, toDrawIndex);
 }
 
 void renderGrid(SDL_Renderer* pRenderer) 
@@ -560,16 +569,8 @@ void renderGrid(SDL_Renderer* pRenderer)
     }
 
     for (int rectType = 0; rectType < (int)PATTERN_MAX_VALUE; ++rectType) {
-        Color* pColor = &g_CellColors[rectType];
-        SDL_SetRenderDrawColor(
-            pRenderer,
-            pColor->r,
-            pColor->g,
-            pColor->b,
-            SDL_ALPHA_OPAQUE);
-
         SDLRectArray* pArray = &g_RectArrays.RectArrays[rectType];
-        SDL_RenderFillRects(pRenderer, pArray->Rects, pArray->NumRects);
+        renderCellArray(pRenderer, rectType, pArray->Rects, pArray->NumRects);
     }
 
     // Render flashing lines if we're clearing lines
