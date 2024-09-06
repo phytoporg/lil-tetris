@@ -8,6 +8,7 @@
 #include "lil-tetris-audio.c"
 #include "lil-tetris-patterns.c"
 #include "lil-tetris-themes.c"
+#include "lil-tetris-text.c"
 
 // Constants
 #define SCREEN_WIDTH 640
@@ -23,6 +24,8 @@
 #define GRID_CELL_HEIGHT 20
 #define GRID_CELL_BORDER 2
 
+#define NEXT_PATTERN_TEXT_X 500
+#define NEXT_PATTERN_TEXT_Y 80
 #define NEXT_PATTERN_X 500
 #define NEXT_PATTERN_Y 100
 #define NEXT_PATTERN_BORDER 5
@@ -57,8 +60,8 @@ typedef struct
 {
     PatternType_t nextPatternType;
     PatternType_t currentPatternType;
-    Uint8      patternGridX;
-    Uint8      patternGridY;
+    Sint8      patternGridX;
+    Sint8      patternGridY;
     Uint8      currentPatternRotation;
     Uint64     currentFrame;
     Uint64     lastDropFrame;
@@ -177,8 +180,8 @@ void commitAndSpawnPattern()
         for (int x = 0; x < pPattern->cols; ++x) {
             if (pPattern->occupancy[y][x])
             {
-                Uint8 gridX = x + g_GameState.patternGridX;
-                Uint8 gridY = y + g_GameState.patternGridY;
+                Sint8 gridX = x + g_GameState.patternGridX;
+                Sint8 gridY = y + g_GameState.patternGridY;
                 g_Grid[gridY][gridX].patternType = g_GameState.currentPatternType;
             }
         }
@@ -647,13 +650,21 @@ int main(int argc, char** argv)
     }
 
     char* pDefaultAssetRoot = ".";
-    if (!AudioInitialize((argc > 1 ? argv[1] : pDefaultAssetRoot)))
+    char* pAssetRoot = (argc > 1 ? argv[1] : pDefaultAssetRoot);
+    if (!AudioInitialize(pAssetRoot))
     {
         fprintf(stderr, "Did not initialize audio\n");
         return -1;
     }
 
+    if (!TextInitialize(pRender, pAssetRoot))
+    {
+        fprintf(stderr, "Did not initialize text\n");
+        return -1;
+    }
+
     srand(time(NULL));
+
 
     initializeGameState();
     initializeGrid();
@@ -729,6 +740,7 @@ int main(int argc, char** argv)
         renderGrid(pRender);
         renderPattern(pRender);
         renderNextPattern(pRender);
+        TextWrite(pRender, "NEXT", NEXT_PATTERN_TEXT_X, NEXT_PATTERN_TEXT_Y);
 
         Uint64 endTime = SDL_GetPerformanceCounter();
 
