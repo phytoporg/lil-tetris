@@ -77,6 +77,7 @@ typedef struct
     PatternType_t nextPatternType;
     PatternType_t currentPatternType;
     PatternType_t holdPatternType;
+	PatternTheme* pCurrentTheme;
     Sint8      patternGridX;
     Sint8      patternGridY;
     Uint8      currentPatternRotation;
@@ -142,6 +143,7 @@ void initializeGameState()
     g_GameState.nextPatternType = randomPatternType();
     g_GameState.currentPatternType = randomPatternType();
     g_GameState.holdPatternType = PATTERN_NONE;
+	g_GameState.pCurrentTheme = g_DefaultThemes;
     g_GameState.currentPatternRotation = 0;
     g_GameState.patternGridX = 
         (GRID_WIDTH / 2) - 
@@ -210,6 +212,12 @@ bool patternCollides(Pattern* pPattern, Sint8 dX, Sint8 dY)
     }
 
     return false;
+}
+
+bool waitingToSpawn()
+{
+    Uint64 sinceLastSpawn = g_GameState.currentFrame - g_GameState.lastSpawnFrame;
+    return sinceLastSpawn < SPAWN_DELAY_FRAMES && g_GameState.lastSpawnFrame > 0;
 }
 
 void commitAndSpawnPattern()
@@ -301,8 +309,10 @@ void checkInputs()
         }
     }
 
-    if (g_GameState.inputHoldPiece)
+    // Ignore hold inputs if we're still waiting to spawn
+    if (g_GameState.inputHoldPiece && !waitingToSpawn())
     {
+
         if (g_GameState.holdPatternType == PATTERN_NONE)
         {
             g_GameState.holdPatternType = g_GameState.currentPatternType;
@@ -335,8 +345,7 @@ void updateGameState()
         return;
     }
 
-    const bool WaitingForSpawn = sinceLastSpawn < SPAWN_DELAY_FRAMES;
-    if (WaitingForSpawn)
+    if (waitingToSpawn())
     {
         g_GameState.currentFrame++;
         return;
@@ -470,6 +479,7 @@ void updateGameState()
                 // Reset stats and level on loss
                 g_GameState.totalClearedLines = 0;
                 g_GameState.currentLevel = 1;
+                g_GameState.pCurrentTheme = g_DefaultThemes;
                 g_GameState.dropSpeed = START_DROP_SPEED;
                 return;
             }
@@ -498,11 +508,20 @@ void updateGameState()
 
         if (linesCleared > 0)
         {
+            int previousLevel = g_GameState.currentLevel;
+
             AudioPlayLineClear();
             g_GameState.totalClearedLines += linesCleared;
             g_GameState.currentLevel = (g_GameState.totalClearedLines / 10) + 1;
             g_GameState.dropSpeed = START_DROP_SPEED + g_GameState.currentLevel;
             g_GameState.clearLinesFrame = g_GameState.currentFrame;
+
+            if (g_GameState.currentLevel > previousLevel)
+            {
+                // Level up!
+                g_GameState.pCurrentTheme =
+                    ThemeGetNextTheme(g_GameState.pCurrentTheme);
+            }
         }
     }
 
@@ -532,7 +551,8 @@ renderCellArray(
     int numRects)
 {
     // Outer
-    Color* pOuterColor = ThemeGetOuterColor( g_DefaultThemes, (int)patternType);
+    Color* pOuterColor = 
+        ThemeGetOuterColor(g_GameState.pCurrentTheme, (int)patternType);
     SDL_SetRenderDrawColor(
         pRenderer,
         pOuterColor->r,
@@ -551,7 +571,8 @@ renderCellArray(
         pRect->h -= (GRID_CELL_BORDER * 2);
     }
     
-    Color* pInnerColor = ThemeGetInnerColor( g_DefaultThemes, (int)patternType);
+    Color* pInnerColor = 
+        ThemeGetInnerColor(g_GameState.pCurrentTheme, (int)patternType);
     SDL_SetRenderDrawColor(
         pRenderer,
         pInnerColor->r,
