@@ -89,6 +89,22 @@ bool AudioPlayMusic()
     return Mix_PlayMusic(g_pMusic, -1) >= 0;
 }
 
+void AudioPauseMusic()
+{
+    if (Mix_PlayingMusic())
+    {
+        Mix_PauseMusic();
+    }
+}
+
+void AudioResumeMusic()
+{
+    if (Mix_PausedMusic())
+    {
+        Mix_ResumeMusic();
+    }
+}
+
 bool AudioPlayLineClear()
 {
     if (!g_pLineClearChunk)

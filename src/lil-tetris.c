@@ -241,6 +241,15 @@ void checkInputs()
 {
     if (g_GameState.inputPauseGame)
     {
+        if (!g_GameState.isPaused)
+        {
+            AudioPauseMusic();
+        }
+        else
+        {
+            AudioResumeMusic();
+        }
+
         g_GameState.isPaused = !g_GameState.isPaused;
     }
 
