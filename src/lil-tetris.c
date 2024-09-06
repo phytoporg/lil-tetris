@@ -31,6 +31,9 @@
 #define STATS_TEXT_BORDERLEFT_X 5
 #define STATS_LEVEL_LOC_Y (STATS_LOC_Y + 30)
 
+#define PAUSED_LOC_X 265
+#define PAUSED_LOC_Y 200
+
 #define NEXT_PATTERN_TEXT_X 450
 #define NEXT_PATTERN_TEXT_Y 80
 #define NEXT_PATTERN_X 450
@@ -84,7 +87,9 @@ typedef struct
     bool       inputUpPressed;
     bool       inputRotateRightPressed;
     bool       inputRotateLeftPressed;
+    bool       inputPauseGame;
     bool       toggleFlash;
+    bool       isPaused;
 } GameState;
 
 // Globals
@@ -115,6 +120,7 @@ void resetInputStates()
     g_GameState.inputUpPressed = false;
     g_GameState.inputRotateRightPressed = false;
     g_GameState.inputRotateLeftPressed = false;
+    g_GameState.inputPauseGame = false;
 }
 
 void initializeGameState()
@@ -135,6 +141,7 @@ void initializeGameState()
     g_GameState.totalClearedLines = 0;
     g_GameState.currentLevel = 1;
     g_GameState.toggleFlash = false;
+    g_GameState.isPaused = false;
 
     resetInputStates();
 }
@@ -209,11 +216,72 @@ void commitAndSpawnPattern()
     g_GameState.lastSpawnFrame = g_GameState.currentFrame;
 }
 
+void checkInputs()
+{
+    if (g_GameState.inputPauseGame)
+    {
+        g_GameState.isPaused = !g_GameState.isPaused;
+    }
+
+    // If the game is paused, don't check any other inputs
+    if (g_GameState.isPaused)
+    {
+        return;
+    }
+
+    // Handle player inputs
+    Pattern* pPattern = getCurrentPattern();
+    if (g_GameState.inputLeftPressed && !g_GameState.inputRightPressed)
+    {
+        if (!patternCollides(getCurrentPattern(), -1, 0))
+        {
+            g_GameState.patternGridX--;
+        }
+    }
+    else if (g_GameState.inputRightPressed && !g_GameState.inputLeftPressed)
+    {
+        if (!patternCollides(getCurrentPattern(), 1, 0))
+        {
+            g_GameState.patternGridX++;
+        }
+    }
+    
+    if (g_GameState.inputRotateRightPressed && !g_GameState.inputRotateLeftPressed)
+    {
+        int numRotations = PatternNumRotations[g_GameState.currentPatternType];
+        int rotationIndex = (g_GameState.currentPatternRotation + 1) % numRotations;
+
+        Pattern* pRotatedPattern = g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
+        if (!patternCollides(pRotatedPattern, 0, 0))
+        {
+            g_GameState.currentPatternRotation = rotationIndex;
+        }
+    }
+    else if (g_GameState.inputRotateLeftPressed && !g_GameState.inputRotateRightPressed)
+    {
+        int numRotations = PatternNumRotations[g_GameState.currentPatternType];
+        int rotationIndex = 
+            g_GameState.currentPatternRotation == 0 ? 
+                numRotations - 1 : 
+                g_GameState.currentPatternRotation - 1;
+        Pattern* pRotatedPattern = g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
+        if (!patternCollides(pRotatedPattern, 0, 0))
+        {
+            g_GameState.currentPatternRotation = rotationIndex;
+        }
+    }
+}
+
 void updateGameState()
 {
     Uint64 sinceLastDrop = g_GameState.currentFrame - g_GameState.lastDropFrame;
     Uint64 sinceLastSpawn = g_GameState.currentFrame - g_GameState.lastSpawnFrame;
     Uint64 dropFrameTarget = (FPS / g_GameState.dropSpeed);
+
+    if (g_GameState.isPaused)
+    {
+        return;
+    }
 
     const bool WaitingForSpawn = sinceLastSpawn < SPAWN_DELAY_FRAMES;
     if (WaitingForSpawn)
@@ -386,47 +454,6 @@ void updateGameState()
         }
     }
 
-    // Handle player inputs
-    Pattern* pPattern = getCurrentPattern();
-    if (g_GameState.inputLeftPressed && !g_GameState.inputRightPressed)
-    {
-        if (!patternCollides(getCurrentPattern(), -1, 0))
-        {
-            g_GameState.patternGridX--;
-        }
-    }
-    else if (g_GameState.inputRightPressed && !g_GameState.inputLeftPressed)
-    {
-        if (!patternCollides(getCurrentPattern(), 1, 0))
-        {
-            g_GameState.patternGridX++;
-        }
-    }
-    
-    if (g_GameState.inputRotateRightPressed && !g_GameState.inputRotateLeftPressed)
-    {
-        int numRotations = PatternNumRotations[g_GameState.currentPatternType];
-        int rotationIndex = (g_GameState.currentPatternRotation + 1) % numRotations;
-
-        Pattern* pRotatedPattern = g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
-        if (!patternCollides(pRotatedPattern, 0, 0))
-        {
-            g_GameState.currentPatternRotation = rotationIndex;
-        }
-    }
-    else if (g_GameState.inputRotateLeftPressed && !g_GameState.inputRotateRightPressed)
-    {
-        int numRotations = PatternNumRotations[g_GameState.currentPatternType];
-        int rotationIndex = 
-            g_GameState.currentPatternRotation == 0 ? 
-                numRotations - 1 : 
-                g_GameState.currentPatternRotation - 1;
-        Pattern* pRotatedPattern = g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
-        if (!patternCollides(pRotatedPattern, 0, 0))
-        {
-            g_GameState.currentPatternRotation = rotationIndex;
-        }
-    }
 
     g_GameState.currentFrame++;
 }
@@ -484,6 +511,12 @@ renderCellArray(
 
 void renderPattern(SDL_Renderer* pRenderer)
 {
+    // Don't render the current pattern if the game is paused
+    if (g_GameState.isPaused)
+    {
+        return;
+    }
+
     // Don't render the current pattern if we're still waiting to spawn
     Uint64 sinceLastSpawn = g_GameState.currentFrame - g_GameState.lastSpawnFrame;
     if (sinceLastSpawn < SPAWN_DELAY_FRAMES && g_GameState.lastSpawnFrame > 0)
@@ -536,6 +569,14 @@ void renderNextPattern(SDL_Renderer* pRenderer)
         SDL_ALPHA_OPAQUE);
     SDL_RenderFillRect(pRenderer, &previewBgRect);
 
+    TextWrite(pRenderer, "NEXT", NEXT_PATTERN_TEXT_X, NEXT_PATTERN_TEXT_Y);
+
+    // Don't render the actual pattern if the game is paused
+    if (g_GameState.isPaused)
+    {
+        return;
+    }
+
     // Now draw the pattern
     int offsetX = ((4 - pPattern->cols) * GRID_CELL_WIDTH) / 2;
     int offsetY = ((4 - pPattern->rows) * GRID_CELL_HEIGHT) / 2;
@@ -559,8 +600,6 @@ void renderNextPattern(SDL_Renderer* pRenderer)
 
     assert(toDrawIndex == 4);
     renderCellArray(pRenderer, g_GameState.nextPatternType, toDraw, toDrawIndex);
-
-    TextWrite(pRenderer, "NEXT", NEXT_PATTERN_TEXT_X, NEXT_PATTERN_TEXT_Y);
 }
 
 void renderStats(SDL_Renderer* pRenderer)
@@ -597,6 +636,16 @@ void renderStats(SDL_Renderer* pRenderer)
     TextWrite(pRenderer, levelText, levelTextX, levelTextY);
 }
 
+void renderPauseText(SDL_Renderer* pRenderer)
+{
+    if (g_GameState.isPaused)
+    {
+        char pauseText[256];
+        sprintf(pauseText, "PAUSE");
+        TextWrite(pRenderer, pauseText, PAUSED_LOC_X, PAUSED_LOC_Y);
+    }
+}
+
 void renderGrid(SDL_Renderer* pRenderer) 
 {
     // Reset the rect array rect counts
@@ -612,7 +661,10 @@ void renderGrid(SDL_Renderer* pRenderer)
             assert((int)pCell->patternType >= 0);
             assert((int)pCell->patternType < PATTERN_MAX_VALUE);
 
-            SDLRectArray* pRectArray = &g_RectArrays.RectArrays[pCell->patternType];
+            // Only show empty cells if the game is paused
+            SDLRectArray* pRectArray = g_GameState.isPaused ? 
+                &g_RectArrays.RectArrays[PATTERN_NONE] :
+                &g_RectArrays.RectArrays[pCell->patternType];
 
             int rectIndex = pRectArray->NumRects;
             SDL_Rect* pRect = &pRectArray->Rects[rectIndex];
@@ -634,7 +686,7 @@ void renderGrid(SDL_Renderer* pRenderer)
     // Render flashing lines if we're clearing lines
     const bool ClearingLines = g_GameState.clearLines[0] >= 0;
     Uint64 sinceClearedLines = g_GameState.currentFrame - g_GameState.clearLinesFrame;
-    if (sinceClearedLines < CLEAR_LINES_FRAMES)
+    if (sinceClearedLines < CLEAR_LINES_FRAMES && !g_GameState.isPaused)
     {
         if ((sinceClearedLines % CLEAR_LINES_FLASH_DURATION) == 0)
         {
@@ -785,6 +837,10 @@ int main(int argc, char** argv)
                 {
                     g_GameState.inputRotateLeftPressed = true;
                 }
+                else if (event.key.keysym.sym == SDLK_SPACE)
+                {
+                    g_GameState.inputPauseGame = true;
+                }
             }
         }
 
@@ -792,10 +848,12 @@ int main(int argc, char** argv)
         Uint64 startTime = SDL_GetPerformanceCounter();
 
         updateGameState();
+        checkInputs();
         renderGrid(pRender);
         renderPattern(pRender);
         renderNextPattern(pRender);
         renderStats(pRender);
+        renderPauseText(pRender);
 
         Uint64 endTime = SDL_GetPerformanceCounter();
 
