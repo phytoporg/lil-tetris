@@ -1,7 +1,13 @@
 - Begin piece spawn above the grid
+-- Can probably get rid of spawn waiting logic as well?
 - Don't disallow rotations solely due to screen edge
 
-- Don't render pieces during game-over line clear
-- Input hints on intro screen
+- real game over presentation and sequence
+- input hints on intro screen
 - particles on quick drop
 - more presentation on level up
+-- Animated "level up!" text
+-- Fade/interpolate between themes?
+- more presentation on line clear
+-- animated block drop rather than teleporting into place
+-- something more interesting than flashing presentation
