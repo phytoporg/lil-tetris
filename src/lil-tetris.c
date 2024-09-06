@@ -24,9 +24,16 @@
 #define GRID_CELL_HEIGHT 20
 #define GRID_CELL_BORDER 2
 
-#define NEXT_PATTERN_TEXT_X 500
+#define STATS_LOC_X 445
+#define STATS_LOC_Y 300
+#define STATS_W 140
+#define STATS_H 65
+#define STATS_TEXT_BORDERLEFT_X 5
+#define STATS_LEVEL_LOC_Y (STATS_LOC_Y + 30)
+
+#define NEXT_PATTERN_TEXT_X 450
 #define NEXT_PATTERN_TEXT_Y 80
-#define NEXT_PATTERN_X 500
+#define NEXT_PATTERN_X 450
 #define NEXT_PATTERN_Y 100
 #define NEXT_PATTERN_BORDER 5
 
@@ -69,6 +76,8 @@ typedef struct
     Uint8      dropSpeed;
     Sint8      clearLines[GRID_HEIGHT];
     Uint64     clearLinesFrame;
+    Uint16     totalClearedLines;
+    Uint8      currentLevel;
     bool       inputLeftPressed;
     bool       inputRightPressed;
     bool       inputDownPressed;
@@ -123,6 +132,8 @@ void initializeGameState()
     g_GameState.dropSpeed = START_DROP_SPEED; // Drops per second
     memset(g_GameState.clearLines, -1, sizeof(g_GameState.clearLines));
     g_GameState.clearLinesFrame = 0;
+    g_GameState.totalClearedLines = 0;
+    g_GameState.currentLevel = 1;
     g_GameState.toggleFlash = false;
 
     resetInputStates();
@@ -335,6 +346,11 @@ void updateGameState()
 
                 g_GameState.clearLinesFrame = g_GameState.currentFrame;
                 g_GameState.currentFrame++;
+
+                // Reset stats and level on loss
+                g_GameState.totalClearedLines = 0;
+                g_GameState.currentLevel = 1;
+                g_GameState.dropSpeed = START_DROP_SPEED;
                 return;
             }
         }
@@ -363,6 +379,9 @@ void updateGameState()
         if (linesCleared > 0)
         {
             AudioPlayLineClear();
+            g_GameState.totalClearedLines += linesCleared;
+            g_GameState.currentLevel = g_GameState.totalClearedLines / 10;
+            g_GameState.dropSpeed = START_DROP_SPEED + g_GameState.currentLevel;
             g_GameState.clearLinesFrame = g_GameState.currentFrame;
         }
     }
@@ -540,6 +559,42 @@ void renderNextPattern(SDL_Renderer* pRenderer)
 
     assert(toDrawIndex == 4);
     renderCellArray(pRenderer, g_GameState.nextPatternType, toDraw, toDrawIndex);
+
+    TextWrite(pRenderer, "NEXT", NEXT_PATTERN_TEXT_X, NEXT_PATTERN_TEXT_Y);
+}
+
+void renderStats(SDL_Renderer* pRenderer)
+{
+    PatternType_t patternType = g_GameState.nextPatternType;
+    Pattern* pPattern = g_PatternLUT[g_GameState.nextPatternType][0];
+
+    // Draw the bg first
+    Color black = { 0, 0, 0 };
+    SDL_Rect statsBgRect;
+    statsBgRect.x = STATS_LOC_X;
+    statsBgRect.y = STATS_LOC_Y;
+    statsBgRect.w = STATS_W;
+    statsBgRect.h = STATS_H;
+
+    SDL_SetRenderDrawColor(
+        pRenderer,
+        black.r,
+        black.g,
+        black.b,
+        SDL_ALPHA_OPAQUE);
+    SDL_RenderFillRect(pRenderer, &statsBgRect);
+
+    const int linesTextX = STATS_LOC_X + STATS_TEXT_BORDERLEFT_X;
+    const int linesTextY = STATS_LOC_Y;
+    char linesText[256];
+    sprintf(linesText, "LINES: %hu", g_GameState.totalClearedLines);
+    TextWrite(pRenderer, linesText, linesTextX, linesTextY);
+
+    const int levelTextX = linesTextX;
+    const int levelTextY = STATS_LEVEL_LOC_Y;
+    char levelText[256];
+    sprintf(levelText, "LEVEL: %hhu", g_GameState.currentLevel);
+    TextWrite(pRenderer, levelText, levelTextX, levelTextY);
 }
 
 void renderGrid(SDL_Renderer* pRenderer) 
@@ -740,7 +795,7 @@ int main(int argc, char** argv)
         renderGrid(pRender);
         renderPattern(pRender);
         renderNextPattern(pRender);
-        TextWrite(pRender, "NEXT", NEXT_PATTERN_TEXT_X, NEXT_PATTERN_TEXT_Y);
+        renderStats(pRender);
 
         Uint64 endTime = SDL_GetPerformanceCounter();
 

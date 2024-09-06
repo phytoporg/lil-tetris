@@ -2,8 +2,6 @@
 #include <stdbool.h>
 
 static TTF_Font* g_pDefaultFont = NULL;
-static SDL_Texture* g_pTextTexture = NULL;
-static SDL_Surface* g_pTextSurface = NULL;
 
 #define TEXT_FONT "pixel_digivolve.otf"
 
@@ -36,42 +34,24 @@ bool TextInitialize(SDL_Renderer* pRenderer, char* pAssetPathRoot)
     return true;
 }
 
-void TextUninitialize()
-{
-    if (g_pTextSurface)
-    {
-        SDL_FreeSurface(g_pTextSurface);
-        g_pTextSurface = NULL;
-    }
-
-    if (g_pTextTexture)
-    {
-        SDL_DestroyTexture(g_pTextTexture);
-        g_pTextTexture = NULL;
-    }
-}
-
 void TextWrite(SDL_Renderer* pRenderer, char* pMessage, int x, int y)
 {
     SDL_Color white = { 255, 255, 255};
-    if (!g_pTextSurface)
+    SDL_Texture* pTexture;
+    SDL_Surface* pSurface;
+
+    pSurface = TTF_RenderText_Solid(g_pDefaultFont, pMessage, white);
+    if (!pSurface)
     {
-        g_pTextSurface = TTF_RenderText_Solid(g_pDefaultFont, pMessage, white);
-        if (!g_pTextSurface)
-        {
-            fprintf(stderr, "Failed to create text surface: %s\n", SDL_GetError());
-            return;
-        }
+        fprintf(stderr, "Failed to create text surface: %s\n", SDL_GetError());
+        return;
     }
 
-    if (!g_pTextTexture)
+    pTexture = SDL_CreateTextureFromSurface(pRenderer, pSurface);
+    if (!pTexture)
     {
-        g_pTextTexture = SDL_CreateTextureFromSurface(pRenderer, g_pTextSurface);
-        if (!g_pTextTexture)
-        {
-            fprintf(stderr, "Failed to create text texture: %s\n", SDL_GetError());
-            return;
-        }
+        fprintf(stderr, "Failed to create text texture: %s\n", SDL_GetError());
+        return;
     }
 
     int w, h;
@@ -87,5 +67,8 @@ void TextWrite(SDL_Renderer* pRenderer, char* pMessage, int x, int y)
     messageRect.w = w;
     messageRect.h = h;
 
-    SDL_RenderCopy(pRenderer, g_pTextTexture, NULL, &messageRect);
+    SDL_RenderCopy(pRenderer, pTexture, NULL, &messageRect);
+
+    SDL_FreeSurface(pSurface);
+    SDL_DestroyTexture(pTexture);
 }
