@@ -40,6 +40,12 @@
 #define NEXT_PATTERN_Y 100
 #define NEXT_PATTERN_BORDER 5
 
+#define HOLD_PATTERN_TEXT_X 60
+#define HOLD_PATTERN_TEXT_Y 80
+#define HOLD_PATTERN_X 60
+#define HOLD_PATTERN_Y 100
+#define HOLD_PATTERN_BORDER 5
+
 #define SPAWN_DELAY_FRAMES 40
 #define CLEAR_LINES_FRAMES 60
 #define CLEAR_LINES_FLASH_DURATION 10
@@ -70,6 +76,7 @@ typedef struct
 {
     PatternType_t nextPatternType;
     PatternType_t currentPatternType;
+    PatternType_t holdPatternType;
     Sint8      patternGridX;
     Sint8      patternGridY;
     Uint8      currentPatternRotation;
@@ -82,6 +89,7 @@ typedef struct
     Uint16     totalClearedLines;
     Uint8      currentLevel;
     HTEXT      hNextText;
+    HTEXT      hHoldText;
     HTEXT      hLinesText;
     HTEXT      hLevelText;
     HTEXT      hPausedText;
@@ -91,6 +99,7 @@ typedef struct
     bool       inputUpPressed;
     bool       inputRotateRightPressed;
     bool       inputRotateLeftPressed;
+    bool       inputHoldPiece;
     bool       inputPauseGame;
     bool       toggleFlash;
     bool       isPaused;
@@ -124,6 +133,7 @@ void resetInputStates()
     g_GameState.inputUpPressed = false;
     g_GameState.inputRotateRightPressed = false;
     g_GameState.inputRotateLeftPressed = false;
+    g_GameState.inputHoldPiece = false;
     g_GameState.inputPauseGame = false;
 }
 
@@ -131,6 +141,7 @@ void initializeGameState()
 {
     g_GameState.nextPatternType = randomPatternType();
     g_GameState.currentPatternType = randomPatternType();
+    g_GameState.holdPatternType = PATTERN_NONE;
     g_GameState.currentPatternRotation = 0;
     g_GameState.patternGridX = 
         (GRID_WIDTH / 2) - 
@@ -145,6 +156,7 @@ void initializeGameState()
     g_GameState.totalClearedLines = 0;
     g_GameState.currentLevel = 1;
     g_GameState.hNextText = TEXT_INVALID_HANDLE;
+    g_GameState.hHoldText = TEXT_INVALID_HANDLE;
     g_GameState.hLinesText = TEXT_INVALID_HANDLE;
     g_GameState.hLevelText = TEXT_INVALID_HANDLE;
     g_GameState.hPausedText = TEXT_INVALID_HANDLE;
@@ -279,6 +291,28 @@ void checkInputs()
             g_GameState.currentPatternRotation = rotationIndex;
         }
     }
+
+    if (g_GameState.inputHoldPiece)
+    {
+        if (g_GameState.holdPatternType == PATTERN_NONE)
+        {
+            g_GameState.holdPatternType = g_GameState.currentPatternType;
+            g_GameState.currentPatternType = g_GameState.nextPatternType; 
+            g_GameState.nextPatternType = randomPatternType();
+        }
+        else
+        {
+            PatternType_t temp = g_GameState.holdPatternType;
+            g_GameState.holdPatternType = g_GameState.currentPatternType;
+            g_GameState.currentPatternType = temp;
+        }
+
+        g_GameState.currentPatternRotation = 0;
+        g_GameState.patternGridX = 
+            (GRID_WIDTH / 2) - 
+            (g_PatternLUT[g_GameState.currentPatternType][0]->cols / 2);
+        g_GameState.patternGridY = 0;
+    }
 }
 
 void updateGameState()
@@ -378,20 +412,7 @@ void updateGameState()
     }
 
     // Check for natural drops, player-induced drops or quick drops
-    if (dropFrameTarget <= sinceLastDrop || g_GameState.inputDownPressed)
-    {
-        if (!patternCollides(getCurrentPattern(), 0, 1))
-        {
-            g_GameState.patternGridY++;
-        }
-        else
-        {
-            commitAndSpawnPattern();
-        }
-
-        g_GameState.lastDropFrame = g_GameState.currentFrame;
-    }
-    else if (g_GameState.inputUpPressed)
+    if (g_GameState.inputUpPressed)
     {
         // Figure out how far to drop the current pattern
         int patternHeight = 1;
@@ -402,6 +423,19 @@ void updateGameState()
 
         g_GameState.patternGridY += patternHeight - 1;
         commitAndSpawnPattern();
+
+        g_GameState.lastDropFrame = g_GameState.currentFrame;
+    }
+    else if (dropFrameTarget <= sinceLastDrop || g_GameState.inputDownPressed)
+    {
+        if (!patternCollides(getCurrentPattern(), 0, 1))
+        {
+            g_GameState.patternGridY++;
+        }
+        else
+        {
+            commitAndSpawnPattern();
+        }
 
         g_GameState.lastDropFrame = g_GameState.currentFrame;
     }
@@ -518,7 +552,7 @@ renderCellArray(
     SDL_RenderFillRects(pRenderer, pRects, numRects);
 }
 
-void renderPattern(SDL_Renderer* pRenderer)
+void renderCurrentPattern(SDL_Renderer* pRenderer)
 {
     // Don't render the current pattern if the game is paused
     if (g_GameState.isPaused)
@@ -620,6 +654,72 @@ void renderNextPattern(SDL_Renderer* pRenderer)
 
     assert(toDrawIndex == 4);
     renderCellArray(pRenderer, g_GameState.nextPatternType, toDraw, toDrawIndex);
+}
+
+void renderHoldPattern(SDL_Renderer* pRenderer)
+{
+    PatternType_t patternType = g_GameState.holdPatternType;
+    Pattern* pPattern = g_PatternLUT[g_GameState.holdPatternType][0];
+
+    // Draw the bg first
+    Color black = { 0, 0, 0 };
+    SDL_Rect holdBgRect;
+    holdBgRect.x = HOLD_PATTERN_X - HOLD_PATTERN_BORDER;
+    holdBgRect.y = HOLD_PATTERN_Y - HOLD_PATTERN_BORDER;
+    holdBgRect.w = HOLD_PATTERN_BORDER * 2 + 4 * GRID_CELL_WIDTH;
+    holdBgRect.h = HOLD_PATTERN_BORDER * 2 + 4 * GRID_CELL_HEIGHT;
+
+    SDL_SetRenderDrawColor(
+        pRenderer,
+        black.r,
+        black.g,
+        black.b,
+        SDL_ALPHA_OPAQUE);
+    SDL_RenderFillRect(pRenderer, &holdBgRect);
+
+    if (g_GameState.hHoldText == TEXT_INVALID_HANDLE)
+    {
+        g_GameState.hHoldText = TextCreateEntry();
+        assert(g_GameState.hHoldText != TEXT_INVALID_HANDLE);
+    }
+
+    TextSetEntryData(g_GameState.hHoldText, pRenderer, "HOLD");
+    TextDrawEntry(
+        g_GameState.hHoldText,
+        pRenderer,
+        HOLD_PATTERN_TEXT_X,
+        HOLD_PATTERN_TEXT_Y);
+
+    // Don't render the actual pattern if the game is paused, or if no pattern
+    // is held.
+    if (g_GameState.isPaused || patternType == PATTERN_NONE)
+    {
+        return;
+    }
+
+    // Now draw the pattern
+    int offsetX = ((4 - pPattern->cols) * GRID_CELL_WIDTH) / 2;
+    int offsetY = ((4 - pPattern->rows) * GRID_CELL_HEIGHT) / 2;
+    
+    int toDrawIndex = 0;
+    SDL_Rect toDraw[4];
+    for (int y = 0; y < pPattern->rows; ++y) {
+        for (int x = 0; x < pPattern->cols; ++x) {
+            if (pPattern->occupancy[y][x])
+            {
+                SDL_Rect* pRect = &toDraw[toDrawIndex];
+                pRect->x = x * GRID_CELL_WIDTH + HOLD_PATTERN_X + offsetX;
+                pRect->y = y * GRID_CELL_HEIGHT + HOLD_PATTERN_Y + offsetY;
+                pRect->w = GRID_CELL_WIDTH;
+                pRect->h = GRID_CELL_HEIGHT;
+
+                ++toDrawIndex;
+            }
+        }
+    }
+
+    assert(toDrawIndex == 4);
+    renderCellArray(pRenderer, g_GameState.holdPatternType, toDraw, toDrawIndex);
 }
 
 void renderStats(SDL_Renderer* pRenderer)
@@ -880,6 +980,10 @@ int main(int argc, char** argv)
                 }
                 else if (event.key.keysym.sym == SDLK_SPACE)
                 {
+                    g_GameState.inputHoldPiece = true;
+                }
+                else if (event.key.keysym.sym == SDLK_p)
+                {
                     g_GameState.inputPauseGame = true;
                 }
             }
@@ -891,8 +995,9 @@ int main(int argc, char** argv)
         updateGameState();
         checkInputs();
         renderGrid(pRender);
-        renderPattern(pRender);
+        renderCurrentPattern(pRender);
         renderNextPattern(pRender);
+        renderHoldPattern(pRender);
         renderStats(pRender);
         renderPauseText(pRender);
 
