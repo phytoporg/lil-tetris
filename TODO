@@ -1,6 +1,7 @@
-- Add more themes
-- Change theme every level
+- Begin piece spawn above the grid
+- Don't disallow rotations solely due to screen edge
+
 - Don't render pieces during game-over line clear
-- Finalize music, sfx
-- "Intro" screen
 - Input hints on intro screen
+- particles on quick drop
+- more presentation on level up

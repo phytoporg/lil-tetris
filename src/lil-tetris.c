@@ -34,6 +34,9 @@
 #define PAUSED_LOC_X 265
 #define PAUSED_LOC_Y 200
 
+#define INTRO_LOC_X 130
+#define INTRO_LOC_Y 210
+
 #define NEXT_PATTERN_TEXT_X 450
 #define NEXT_PATTERN_TEXT_Y 80
 #define NEXT_PATTERN_X 450
@@ -94,6 +97,7 @@ typedef struct
     HTEXT      hLinesText;
     HTEXT      hLevelText;
     HTEXT      hPausedText;
+    HTEXT      hIntroText;
     bool       inputLeftPressed;
     bool       inputRightPressed;
     bool       inputDownPressed;
@@ -102,8 +106,11 @@ typedef struct
     bool       inputRotateLeftPressed;
     bool       inputHoldPiece;
     bool       inputPauseGame;
+    bool       inputBeginGame;
     bool       toggleFlash;
     bool       isPaused;
+    bool       isIntro;
+    bool       renderCells;
 } GameState;
 
 // Globals
@@ -136,6 +143,7 @@ void resetInputStates()
     g_GameState.inputRotateLeftPressed = false;
     g_GameState.inputHoldPiece = false;
     g_GameState.inputPauseGame = false;
+    g_GameState.inputBeginGame = false;
 }
 
 void initializeGameState()
@@ -162,8 +170,11 @@ void initializeGameState()
     g_GameState.hLinesText = TEXT_INVALID_HANDLE;
     g_GameState.hLevelText = TEXT_INVALID_HANDLE;
     g_GameState.hPausedText = TEXT_INVALID_HANDLE;
+    g_GameState.hIntroText = TEXT_INVALID_HANDLE;
     g_GameState.toggleFlash = false;
     g_GameState.isPaused = false;
+    g_GameState.isIntro = true;
+    g_GameState.renderCells = true;
 
     resetInputStates();
 }
@@ -247,6 +258,11 @@ void commitAndSpawnPattern()
 
 void checkInputs()
 {
+    if (g_GameState.inputBeginGame && g_GameState.isIntro)
+    {
+        g_GameState.isIntro = false;
+    }
+
     if (g_GameState.inputPauseGame)
     {
         if (!g_GameState.isPaused)
@@ -340,10 +356,13 @@ void updateGameState()
     Uint64 sinceLastSpawn = g_GameState.currentFrame - g_GameState.lastSpawnFrame;
     Uint64 dropFrameTarget = (FPS / g_GameState.dropSpeed);
 
-    if (g_GameState.isPaused)
+    if (g_GameState.isPaused || g_GameState.isIntro)
     {
+        g_GameState.renderCells = false;
         return;
     }
+
+    g_GameState.renderCells = true;
 
     if (waitingToSpawn())
     {
@@ -584,8 +603,7 @@ renderCellArray(
 
 void renderCurrentPattern(SDL_Renderer* pRenderer)
 {
-    // Don't render the current pattern if the game is paused
-    if (g_GameState.isPaused)
+    if (!g_GameState.renderCells)
     {
         return;
     }
@@ -656,7 +674,7 @@ void renderNextPattern(SDL_Renderer* pRenderer)
         NEXT_PATTERN_TEXT_Y);
 
     // Don't render the actual pattern if the game is paused
-    if (g_GameState.isPaused)
+    if (!g_GameState.renderCells)
     {
         return;
     }
@@ -720,9 +738,8 @@ void renderHoldPattern(SDL_Renderer* pRenderer)
         HOLD_PATTERN_TEXT_X,
         HOLD_PATTERN_TEXT_Y);
 
-    // Don't render the actual pattern if the game is paused, or if no pattern
-    // is held.
-    if (g_GameState.isPaused || patternType == PATTERN_NONE)
+    // Don't render the actual pattern if no pattern is held.
+    if (!g_GameState.renderCells || patternType == PATTERN_NONE)
     {
         return;
     }
@@ -817,6 +834,21 @@ void renderPauseText(SDL_Renderer* pRenderer)
     }
 }
 
+void renderIntroText(SDL_Renderer* pRenderer)
+{
+    if (g_GameState.isIntro)
+    {
+        if (g_GameState.hIntroText == TEXT_INVALID_HANDLE)
+        {
+            g_GameState.hIntroText = TextCreateEntry();
+            assert(g_GameState.hIntroText != TEXT_INVALID_HANDLE);
+        }
+
+        TextSetEntryData(g_GameState.hIntroText, pRenderer, "PRESS SPACEBAR TO START");
+        TextDrawEntry(g_GameState.hIntroText, pRenderer, INTRO_LOC_X, INTRO_LOC_Y);
+    }
+}
+
 void renderGrid(SDL_Renderer* pRenderer) 
 {
     // Reset the rect array rect counts
@@ -832,8 +864,8 @@ void renderGrid(SDL_Renderer* pRenderer)
             assert((int)pCell->patternType >= 0);
             assert((int)pCell->patternType < PATTERN_MAX_VALUE);
 
-            // Only show empty cells if the game is paused
-            SDLRectArray* pRectArray = g_GameState.isPaused ? 
+            // Only show empty cells if no cells are to be rendered
+            SDLRectArray* pRectArray = !g_GameState.renderCells ? 
                 &g_RectArrays.RectArrays[PATTERN_NONE] :
                 &g_RectArrays.RectArrays[pCell->patternType];
 
@@ -857,7 +889,7 @@ void renderGrid(SDL_Renderer* pRenderer)
     // Render flashing lines if we're clearing lines
     const bool ClearingLines = g_GameState.clearLines[0] >= 0;
     Uint64 sinceClearedLines = g_GameState.currentFrame - g_GameState.clearLinesFrame;
-    if (sinceClearedLines < CLEAR_LINES_FRAMES && !g_GameState.isPaused)
+    if (sinceClearedLines < CLEAR_LINES_FRAMES && g_GameState.renderCells)
     {
         if ((sinceClearedLines % CLEAR_LINES_FLASH_DURATION) == 0)
         {
@@ -964,7 +996,6 @@ int main(int argc, char** argv)
         SDL_RenderClear(pRender);
 
         resetInputStates();
-        AudioPlayMusic();
 
         SDL_Event event;
         while(SDL_PollEvent(&event) != 0)
@@ -1011,6 +1042,7 @@ int main(int argc, char** argv)
                 else if (event.key.keysym.sym == SDLK_SPACE)
                 {
                     g_GameState.inputHoldPiece = true;
+                    g_GameState.isIntro = false;
                 }
                 else if (event.key.keysym.sym == SDLK_p)
                 {
@@ -1022,6 +1054,11 @@ int main(int argc, char** argv)
         // Main loop
         Uint64 startTime = SDL_GetPerformanceCounter();
 
+        if (!g_GameState.isIntro)
+        {
+            AudioPlayMusic();
+        }
+
         updateGameState();
         checkInputs();
         renderGrid(pRender);
@@ -1030,6 +1067,7 @@ int main(int argc, char** argv)
         renderHoldPattern(pRender);
         renderStats(pRender);
         renderPauseText(pRender);
+        renderIntroText(pRender);
 
         Uint64 endTime = SDL_GetPerformanceCounter();
 
