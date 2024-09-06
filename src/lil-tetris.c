@@ -81,6 +81,10 @@ typedef struct
     Uint64     clearLinesFrame;
     Uint16     totalClearedLines;
     Uint8      currentLevel;
+    HTEXT      hNextText;
+    HTEXT      hLinesText;
+    HTEXT      hLevelText;
+    HTEXT      hPausedText;
     bool       inputLeftPressed;
     bool       inputRightPressed;
     bool       inputDownPressed;
@@ -140,6 +144,10 @@ void initializeGameState()
     g_GameState.clearLinesFrame = 0;
     g_GameState.totalClearedLines = 0;
     g_GameState.currentLevel = 1;
+    g_GameState.hNextText = TEXT_INVALID_HANDLE;
+    g_GameState.hLinesText = TEXT_INVALID_HANDLE;
+    g_GameState.hLevelText = TEXT_INVALID_HANDLE;
+    g_GameState.hPausedText = TEXT_INVALID_HANDLE;
     g_GameState.toggleFlash = false;
     g_GameState.isPaused = false;
 
@@ -148,8 +156,9 @@ void initializeGameState()
 
 Pattern* getCurrentPattern()
 {
-    return
-        g_PatternLUT[g_GameState.currentPatternType][g_GameState.currentPatternRotation];
+    const PatternType_t CurrentType = g_GameState.currentPatternType;
+    const Uint8 CurrentRotation = g_GameState.currentPatternRotation;
+    return g_PatternLUT[CurrentType][CurrentRotation];
 }
 
 bool patternCollides(Pattern* pPattern, Sint8 dX, Sint8 dY)
@@ -448,7 +457,7 @@ void updateGameState()
         {
             AudioPlayLineClear();
             g_GameState.totalClearedLines += linesCleared;
-            g_GameState.currentLevel = g_GameState.totalClearedLines / 10;
+            g_GameState.currentLevel = (g_GameState.totalClearedLines / 10) + 1;
             g_GameState.dropSpeed = START_DROP_SPEED + g_GameState.currentLevel;
             g_GameState.clearLinesFrame = g_GameState.currentFrame;
         }
@@ -569,7 +578,18 @@ void renderNextPattern(SDL_Renderer* pRenderer)
         SDL_ALPHA_OPAQUE);
     SDL_RenderFillRect(pRenderer, &previewBgRect);
 
-    TextWrite(pRenderer, "NEXT", NEXT_PATTERN_TEXT_X, NEXT_PATTERN_TEXT_Y);
+    if (g_GameState.hNextText == TEXT_INVALID_HANDLE)
+    {
+        g_GameState.hNextText = TextCreateEntry();
+        assert(g_GameState.hNextText != TEXT_INVALID_HANDLE);
+    }
+
+    TextSetEntryData(g_GameState.hNextText, pRenderer, "NEXT");
+    TextDrawEntry(
+        g_GameState.hNextText,
+        pRenderer,
+        NEXT_PATTERN_TEXT_X,
+        NEXT_PATTERN_TEXT_Y);
 
     // Don't render the actual pattern if the game is paused
     if (g_GameState.isPaused)
@@ -623,26 +643,47 @@ void renderStats(SDL_Renderer* pRenderer)
         SDL_ALPHA_OPAQUE);
     SDL_RenderFillRect(pRenderer, &statsBgRect);
 
+    // Lines text
+    if (g_GameState.hLinesText == TEXT_INVALID_HANDLE)
+    {
+        g_GameState.hLinesText = TextCreateEntry();
+        assert(g_GameState.hLinesText != TEXT_INVALID_HANDLE);
+    }
+
     const int linesTextX = STATS_LOC_X + STATS_TEXT_BORDERLEFT_X;
     const int linesTextY = STATS_LOC_Y;
     char linesText[256];
     sprintf(linesText, "LINES: %hu", g_GameState.totalClearedLines);
-    TextWrite(pRenderer, linesText, linesTextX, linesTextY);
+    TextSetEntryData(g_GameState.hLinesText, pRenderer, linesText);
+    TextDrawEntry(g_GameState.hLinesText, pRenderer, linesTextX, linesTextY);
+
+    // Level text
+    if (g_GameState.hLevelText == TEXT_INVALID_HANDLE)
+    {
+        g_GameState.hLevelText = TextCreateEntry();
+        assert(g_GameState.hLevelText != TEXT_INVALID_HANDLE);
+    }
 
     const int levelTextX = linesTextX;
     const int levelTextY = STATS_LEVEL_LOC_Y;
     char levelText[256];
     sprintf(levelText, "LEVEL: %hhu", g_GameState.currentLevel);
-    TextWrite(pRenderer, levelText, levelTextX, levelTextY);
+    TextSetEntryData(g_GameState.hLevelText, pRenderer, levelText);
+    TextDrawEntry(g_GameState.hLevelText, pRenderer, levelTextX, levelTextY);
 }
 
 void renderPauseText(SDL_Renderer* pRenderer)
 {
     if (g_GameState.isPaused)
     {
-        char pauseText[256];
-        sprintf(pauseText, "PAUSE");
-        TextWrite(pRenderer, pauseText, PAUSED_LOC_X, PAUSED_LOC_Y);
+        if (g_GameState.hPausedText == TEXT_INVALID_HANDLE)
+        {
+            g_GameState.hPausedText = TextCreateEntry();
+            assert(g_GameState.hPausedText != TEXT_INVALID_HANDLE);
+        }
+
+        TextSetEntryData(g_GameState.hPausedText, pRenderer, "PAUSE");
+        TextDrawEntry(g_GameState.hPausedText, pRenderer, PAUSED_LOC_X, PAUSED_LOC_Y);
     }
 }
 
