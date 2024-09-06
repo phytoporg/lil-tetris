@@ -1041,8 +1041,14 @@ int main(int argc, char** argv)
                 }
                 else if (event.key.keysym.sym == SDLK_SPACE)
                 {
-                    g_GameState.inputHoldPiece = true;
-                    g_GameState.isIntro = false;
+                    if (g_GameState.isIntro)
+                    {
+                        g_GameState.isIntro = false;
+                    }
+                    else
+                    {
+                        g_GameState.inputHoldPiece = true;
+                    }
                 }
                 else if (event.key.keysym.sym == SDLK_p)
                 {
