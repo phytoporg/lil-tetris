@@ -500,6 +500,9 @@ void updateGameState()
                 g_GameState.currentLevel = 1;
                 g_GameState.pCurrentTheme = g_DefaultThemes;
                 g_GameState.dropSpeed = START_DROP_SPEED;
+                g_GameState.holdPatternType = PATTERN_NONE;
+                g_GameState.currentPatternType = randomPatternType();
+                g_GameState.nextPatternType = randomPatternType();
                 return;
             }
         }
@@ -567,10 +570,13 @@ renderCellArray(
     SDL_Renderer* pRenderer,
     PatternType_t patternType,
     SDL_Rect* pRects,
-    int numRects)
+    int numRects,
+    Color* pInnerColorOverride,
+    Color* pOuterColorOverride)
 {
     // Outer
     Color* pOuterColor = 
+        pOuterColorOverride ? pOuterColorOverride :
         ThemeGetOuterColor(g_GameState.pCurrentTheme, (int)patternType);
     SDL_SetRenderDrawColor(
         pRenderer,
@@ -591,6 +597,7 @@ renderCellArray(
     }
     
     Color* pInnerColor = 
+        pInnerColorOverride ? pInnerColorOverride :
         ThemeGetInnerColor(g_GameState.pCurrentTheme, (int)patternType);
     SDL_SetRenderDrawColor(
         pRenderer,
@@ -601,6 +608,67 @@ renderCellArray(
     SDL_RenderFillRects(pRenderer, pRects, numRects);
 }
 
+void renderShadowPattern(SDL_Renderer* pRenderer)
+{
+    if (!g_GameState.renderCells)
+    {
+        return;
+    }
+
+    // Don't render the shadow pattern if we're still waiting to spawn
+    if (waitingToSpawn())
+    {
+        return;
+    }
+
+    PatternType_t patternType = g_GameState.currentPatternType;
+    Pattern* pPattern = getCurrentPattern();
+
+    // Figure out the shadow pattern location
+    int patternHeight = 1;
+    while (!patternCollides(pPattern, 0, patternHeight))
+    {
+        ++patternHeight;
+    }
+
+    const int ShadowPatternX = g_GameState.patternGridX;
+    const int ShadowPatternY = g_GameState.patternGridY + patternHeight - 1;
+
+    if (ShadowPatternY == g_GameState.patternGridY)
+    {
+        // We're overlapping the current pattern, so don't draw anything
+        return;
+    }
+
+    int toDrawIndex = 0;
+    SDL_Rect toDraw[4];
+    for (int y = 0; y < pPattern->rows; ++y) {
+        for (int x = 0; x < pPattern->cols; ++x) {
+            if (pPattern->occupancy[y][x])
+            {
+                SDL_Rect* pRect = &toDraw[toDrawIndex];
+                pRect->x = (x + ShadowPatternX) * GRID_CELL_WIDTH + GRID_UPPER_X;
+                pRect->y = (y + ShadowPatternY) * GRID_CELL_HEIGHT + GRID_UPPER_Y;
+                pRect->w = GRID_CELL_WIDTH;
+                pRect->h = GRID_CELL_HEIGHT;
+
+                ++toDrawIndex;
+            }
+        }
+    }
+
+    Color kShadowColorOuter = { 70, 5, 130 };
+    Color kShadowColorInner = { 30, 5, 40 };
+
+    assert(toDrawIndex == 4);
+    renderCellArray(
+        pRenderer,
+        g_GameState.currentPatternType,
+        toDraw,
+        toDrawIndex,
+        &kShadowColorInner, &kShadowColorOuter);
+}
+
 void renderCurrentPattern(SDL_Renderer* pRenderer)
 {
     if (!g_GameState.renderCells)
@@ -608,9 +676,7 @@ void renderCurrentPattern(SDL_Renderer* pRenderer)
         return;
     }
 
-    // Don't render the current pattern if we're still waiting to spawn
-    Uint64 sinceLastSpawn = g_GameState.currentFrame - g_GameState.lastSpawnFrame;
-    if (sinceLastSpawn < SPAWN_DELAY_FRAMES && g_GameState.lastSpawnFrame > 0)
+    if (waitingToSpawn())
     {
         return;
     }
@@ -636,7 +702,12 @@ void renderCurrentPattern(SDL_Renderer* pRenderer)
     }
 
     assert(toDrawIndex == 4);
-    renderCellArray(pRenderer, g_GameState.currentPatternType, toDraw, toDrawIndex);
+    renderCellArray(
+        pRenderer,
+        g_GameState.currentPatternType,
+        toDraw,
+        toDrawIndex,
+        NULL, NULL);
 }
 
 void renderNextPattern(SDL_Renderer* pRenderer)
@@ -701,7 +772,12 @@ void renderNextPattern(SDL_Renderer* pRenderer)
     }
 
     assert(toDrawIndex == 4);
-    renderCellArray(pRenderer, g_GameState.nextPatternType, toDraw, toDrawIndex);
+    renderCellArray(
+        pRenderer,
+        g_GameState.nextPatternType,
+        toDraw,
+        toDrawIndex, 
+        NULL, NULL);
 }
 
 void renderHoldPattern(SDL_Renderer* pRenderer)
@@ -766,7 +842,12 @@ void renderHoldPattern(SDL_Renderer* pRenderer)
     }
 
     assert(toDrawIndex == 4);
-    renderCellArray(pRenderer, g_GameState.holdPatternType, toDraw, toDrawIndex);
+    renderCellArray(
+        pRenderer,
+        g_GameState.holdPatternType,
+        toDraw,
+        toDrawIndex,
+        NULL, NULL);
 }
 
 void renderStats(SDL_Renderer* pRenderer)
@@ -883,7 +964,12 @@ void renderGrid(SDL_Renderer* pRenderer)
 
     for (int rectType = 0; rectType < (int)PATTERN_MAX_VALUE; ++rectType) {
         SDLRectArray* pArray = &g_RectArrays.RectArrays[rectType];
-        renderCellArray(pRenderer, rectType, pArray->Rects, pArray->NumRects);
+        renderCellArray(
+            pRenderer,
+            rectType,
+            pArray->Rects,
+            pArray->NumRects,
+            NULL, NULL);
     }
 
     // Render flashing lines if we're clearing lines
@@ -1069,6 +1155,7 @@ int main(int argc, char** argv)
         checkInputs();
         renderGrid(pRender);
         renderCurrentPattern(pRender);
+        renderShadowPattern(pRender);
         renderNextPattern(pRender);
         renderHoldPattern(pRender);
         renderStats(pRender);
