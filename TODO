@@ -1,11 +1,13 @@
-- More leniency before pieces are committed when they collide (not sure how yet)
+- more leniency before pieces are committed when they collide (not sure how yet)
+-- it's hard to survive at high levels, gotta study other tetris implementations
 
-- real game over presentation and sequence
-- input hints on intro screen
 - particles on quick drop
+-- bones are in place, needs more work to look nice
+
 - more presentation on level up
 -- Animated "level up!" text
 -- Fade/interpolate between themes?
 - more presentation on line clear
 -- animated block drop rather than teleporting into place
 -- something more interesting than flashing presentation
+- input hints on intro screen
