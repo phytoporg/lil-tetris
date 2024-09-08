@@ -1154,8 +1154,8 @@ int main(int argc, char** argv)
         updateGameState();
         checkInputs();
         renderGrid(pRender);
-        renderCurrentPattern(pRender);
         renderShadowPattern(pRender);
+        renderCurrentPattern(pRender);
         renderNextPattern(pRender);
         renderHoldPattern(pRender);
         renderStats(pRender);
