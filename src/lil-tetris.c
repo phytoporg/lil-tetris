@@ -186,8 +186,17 @@ Pattern* getCurrentPattern()
     return g_PatternLUT[CurrentType][CurrentRotation];
 }
 
-bool patternCollides(Pattern* pPattern, Sint8 dX, Sint8 dY)
+ enum PatternCollision {
+     COLLIDES_NONE      = 0,
+     COLLIDES_BOTTOM    = 1 << 0,
+     COLLIDES_LEFT      = 1 << 1,
+     COLLIDES_RIGHT     = 1 << 2,
+     COLLIDES_COMMITTED = 1 << 3,
+};
+
+Uint8 patternCollides(Pattern* pPattern, Sint8 dX, Sint8 dY)
 {
+    int collisionFlags = COLLIDES_NONE;
     for (int y = 0; y < pPattern->rows; ++y) {
         for (int x = 0; x < pPattern->cols; ++x) {
             if (pPattern->occupancy[y][x])
@@ -198,31 +207,31 @@ bool patternCollides(Pattern* pPattern, Sint8 dX, Sint8 dY)
                 // Collides with bottom?
                 if (gridY >= GRID_HEIGHT)
                 {
-                    return true;
+                    collisionFlags |= COLLIDES_BOTTOM;
                 }
 
                 // Collides with left?
                 if (gridX < 0)
                 {
-                    return true;
+                    collisionFlags |= COLLIDES_LEFT;
                 }
 
                 // Collides with right?
                 if (gridX >= GRID_WIDTH)
                 {
-                    return true;
+                    collisionFlags |= COLLIDES_RIGHT;
                 }
 
                 // Collides with committed cells?
                 if (g_Grid[gridY][gridX].patternType != PATTERN_NONE)
                 {
-                    return true;
+                    collisionFlags |= COLLIDES_COMMITTED;
                 }
             }
         }
     }
 
-    return false;
+    return collisionFlags;
 }
 
 bool waitingToSpawn()
@@ -306,9 +315,20 @@ void checkInputs()
         int rotationIndex = (g_GameState.currentPatternRotation + 1) % numRotations;
 
         Pattern* pRotatedPattern = g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
-        if (!patternCollides(pRotatedPattern, 0, 0))
+
+        // Resolve any collisions with the stage edge
+        Sint8 dX = 0;
+        Uint8 CollisionFlags = patternCollides(pRotatedPattern, dX, 0);
+        while (CollisionFlags == COLLIDES_RIGHT || CollisionFlags == COLLIDES_LEFT)
+        {
+            dX += (CollisionFlags == COLLIDES_RIGHT ? -1 : 1);
+            CollisionFlags = patternCollides(pRotatedPattern, dX, 0);
+        }
+
+        if (CollisionFlags == COLLIDES_NONE)
         {
             g_GameState.currentPatternRotation = rotationIndex;
+            g_GameState.patternGridX += dX;
         }
     }
     else if (g_GameState.inputRotateLeftPressed && !g_GameState.inputRotateRightPressed)
@@ -319,9 +339,20 @@ void checkInputs()
                 numRotations - 1 : 
                 g_GameState.currentPatternRotation - 1;
         Pattern* pRotatedPattern = g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
-        if (!patternCollides(pRotatedPattern, 0, 0))
+
+        // Resolve any collisions with the stage edge
+        Sint8 dX = 0;
+        Uint8 CollisionFlags = patternCollides(pRotatedPattern, dX, 0);
+        while (CollisionFlags == COLLIDES_RIGHT || CollisionFlags == COLLIDES_LEFT)
+        {
+            dX += (CollisionFlags == COLLIDES_RIGHT ? -1 : 1);
+            CollisionFlags = patternCollides(pRotatedPattern, dX, 0);
+        }
+
+        if (CollisionFlags == COLLIDES_NONE)
         {
             g_GameState.currentPatternRotation = rotationIndex;
+            g_GameState.patternGridX += dX;
         }
     }
 
