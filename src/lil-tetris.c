@@ -133,6 +133,13 @@ PatternType_t randomPatternType()
     return (PatternType_t)(rand() % (int)(PATTERN_MAX_VALUE - 1) + 1);
 }
 
+void getSpawnPosition(PatternType_t patternType, Sint8* pXOut, Sint8* pYOut)
+{
+    Pattern* pPattern = g_PatternLUT[patternType][0];
+    *pXOut = (GRID_WIDTH / 2) - (pPattern->cols / 2);
+    *pYOut = -pPattern->rows;
+}
+
 void resetInputStates()
 {
     g_GameState.inputLeftPressed = false;
@@ -153,10 +160,6 @@ void initializeGameState()
     g_GameState.holdPatternType = PATTERN_NONE;
 	g_GameState.pCurrentTheme = g_DefaultThemes;
     g_GameState.currentPatternRotation = 0;
-    g_GameState.patternGridX = 
-        (GRID_WIDTH / 2) - 
-        (g_PatternLUT[g_GameState.currentPatternType][0]->cols / 2);
-    g_GameState.patternGridY = 0;
     g_GameState.currentFrame = 0;
     g_GameState.lastDropFrame = 0;
     g_GameState.lastSpawnFrame = 0;
@@ -175,6 +178,11 @@ void initializeGameState()
     g_GameState.isPaused = false;
     g_GameState.isIntro = true;
     g_GameState.renderCells = true;
+
+    getSpawnPosition(
+        g_GameState.currentPatternType,
+        &(g_GameState.patternGridX),
+        &(g_GameState.patternGridY));
 
     resetInputStates();
 }
@@ -223,7 +231,7 @@ Uint8 patternCollides(Pattern* pPattern, Sint8 dX, Sint8 dY)
                 }
 
                 // Collides with committed cells?
-                if (g_Grid[gridY][gridX].patternType != PATTERN_NONE)
+                if (gridY >= 0 && g_Grid[gridY][gridX].patternType != PATTERN_NONE)
                 {
                     collisionFlags |= COLLIDES_COMMITTED;
                 }
@@ -257,10 +265,11 @@ void commitAndSpawnPattern()
     g_GameState.currentPatternType = g_GameState.nextPatternType;
     g_GameState.nextPatternType = randomPatternType();
     g_GameState.currentPatternRotation = 0;
-    g_GameState.patternGridX = 
-        (GRID_WIDTH / 2) - 
-        (getCurrentPattern()->cols / 2);
-    g_GameState.patternGridY = 0;
+    getSpawnPosition(
+        g_GameState.currentPatternType,
+        &(g_GameState.patternGridX),
+        &(g_GameState.patternGridY));
+
 
     g_GameState.lastSpawnFrame = g_GameState.currentFrame;
 }
@@ -359,7 +368,6 @@ void checkInputs()
     // Ignore hold inputs if we're still waiting to spawn
     if (g_GameState.inputHoldPiece && !waitingToSpawn())
     {
-
         if (g_GameState.holdPatternType == PATTERN_NONE)
         {
             g_GameState.holdPatternType = g_GameState.currentPatternType;
@@ -374,10 +382,10 @@ void checkInputs()
         }
 
         g_GameState.currentPatternRotation = 0;
-        g_GameState.patternGridX = 
-            (GRID_WIDTH / 2) - 
-            (g_PatternLUT[g_GameState.currentPatternType][0]->cols / 2);
-        g_GameState.patternGridY = 0;
+        getSpawnPosition(
+            g_GameState.currentPatternType,
+            &(g_GameState.patternGridX),
+            &(g_GameState.patternGridY));
     }
 }
 
@@ -515,8 +523,9 @@ void updateGameState()
         if (g_GameState.lastSpawnFrame == g_GameState.currentFrame)
         {
             Pattern* pNextPattern = g_PatternLUT[g_GameState.nextPatternType][0];
-            if (patternCollides(pNextPattern, 0, 0))
+            if (patternCollides(pNextPattern, 0, 0) & COLLIDES_COMMITTED)
             {
+                fprintf(stderr, "LOSE, COLLISION = 0x%04X\n", patternCollides(pNextPattern, 0, 0));
                 // Just clear all lines on lose
                 for (Uint8 y = 0; y < GRID_HEIGHT; ++y)
                 {
@@ -721,9 +730,18 @@ void renderCurrentPattern(SDL_Renderer* pRenderer)
         for (int x = 0; x < pPattern->cols; ++x) {
             if (pPattern->occupancy[y][x])
             {
+                const int GridX = x + g_GameState.patternGridX;
+                const int GridY = y + g_GameState.patternGridY;
+
+                if (GridY < 0)
+                {
+                    // Don't render any cells "above" the grid
+                    continue;
+                }
+
                 SDL_Rect* pRect = &toDraw[toDrawIndex];
-                pRect->x = (x + g_GameState.patternGridX) * GRID_CELL_WIDTH + GRID_UPPER_X;
-                pRect->y = (y + g_GameState.patternGridY) * GRID_CELL_HEIGHT + GRID_UPPER_Y;
+                pRect->x = GridX * GRID_CELL_WIDTH + GRID_UPPER_X;
+                pRect->y = GridY * GRID_CELL_HEIGHT + GRID_UPPER_Y;
                 pRect->w = GRID_CELL_WIDTH;
                 pRect->h = GRID_CELL_HEIGHT;
 
@@ -732,7 +750,6 @@ void renderCurrentPattern(SDL_Renderer* pRenderer)
         }
     }
 
-    assert(toDrawIndex == 4);
     renderCellArray(
         pRenderer,
         g_GameState.currentPatternType,

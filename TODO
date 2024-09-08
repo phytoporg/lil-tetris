@@ -1,5 +1,3 @@
-- Begin piece spawn above the grid
--- Can probably get rid of spawn waiting logic as well?
 - More leniency before pieces are committed when they collide (not sure how yet)
 
 - real game over presentation and sequence
