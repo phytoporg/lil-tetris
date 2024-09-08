@@ -9,6 +9,7 @@
 #include "lil-tetris-patterns.c"
 #include "lil-tetris-themes.c"
 #include "lil-tetris-text.c"
+#include "lil-tetris-particles.c"
 
 // Constants
 #define SCREEN_WIDTH 640
@@ -137,8 +138,7 @@ void getSpawnPosition(PatternType_t patternType, Sint8* pXOut, Sint8* pYOut)
 {
     Pattern* pPattern = g_PatternLUT[patternType][0];
     *pXOut = (GRID_WIDTH / 2) - (pPattern->cols / 2);
-    // *pYOut = -pPattern->rows;
-    *pYOut = 0;
+    *pYOut = -pPattern->rows;
 }
 
 void resetInputStates()
@@ -258,6 +258,12 @@ void commitAndSpawnPattern()
             {
                 Sint8 gridX = x + g_GameState.patternGridX;
                 Sint8 gridY = y + g_GameState.patternGridY;
+
+                if (gridY < 0)
+                {
+                    continue;
+                }
+
                 g_Grid[gridY][gridX].patternType = g_GameState.currentPatternType;
             }
         }
@@ -493,15 +499,44 @@ void updateGameState()
     {
         // Figure out how far to drop the current pattern
         int patternHeight = 1;
-        while (!patternCollides(getCurrentPattern(), 0, patternHeight))
+        Pattern* pPattern = getCurrentPattern();
+        while (!patternCollides(pPattern, 0, patternHeight))
         {
             ++patternHeight;
         }
 
+        const Sint8 OldPatternGridX = g_GameState.patternGridX;
+        const Sint8 OldPatternGridY = g_GameState.patternGridY;
         g_GameState.patternGridY += patternHeight - 1;
         commitAndSpawnPattern();
 
         g_GameState.lastDropFrame = g_GameState.currentFrame;
+
+        // Emit particles between the current pattern and the drop location
+        for (int i = 0; i < (patternHeight - 1); ++i)
+        {
+            // Just one per grid position atm
+            SquareParticle_t* pNewParticle = MakeParticle();
+            if (!pNewParticle)
+            {
+                continue;
+            }
+
+            // TODO: Offset X and Y randomly
+            // TODO: Randomly don't emit a new particle in the inner loop
+            // TODO: Shrink the particles over time
+            // TODO: Displace the particles over time (falling?)
+            // TODO: Color the particles according to the falling piece?
+
+            pNewParticle->Lifetime = i + 1;
+            pNewParticle->X =
+                OldPatternGridX * GRID_CELL_WIDTH + 
+                GRID_UPPER_X + 
+                ((pPattern->cols * GRID_CELL_WIDTH) / 2);
+            pNewParticle->Y =
+                (OldPatternGridY + i) * GRID_CELL_HEIGHT + 
+                GRID_UPPER_Y; 
+        }
     }
     else if (dropFrameTarget <= sinceLastDrop || g_GameState.inputDownPressed)
     {
@@ -1133,8 +1168,9 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    srand(time(NULL));
+    ParticlesInitialize();
 
+    srand(time(NULL));
 
     initializeGameState();
     initializeGrid();
@@ -1226,6 +1262,8 @@ int main(int argc, char** argv)
         }
 
         updateGameState();
+        ParticlesTick();
+
         checkInputs();
         renderGrid(pRender);
         renderShadowPattern(pRender);
@@ -1235,6 +1273,7 @@ int main(int argc, char** argv)
         renderStats(pRender);
         renderPauseText(pRender);
         renderIntroText(pRender);
+        ParticlesRender(pRender);
 
         Uint64 endTime = SDL_GetPerformanceCounter();
 
