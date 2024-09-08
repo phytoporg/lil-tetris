@@ -137,7 +137,8 @@ void getSpawnPosition(PatternType_t patternType, Sint8* pXOut, Sint8* pYOut)
 {
     Pattern* pPattern = g_PatternLUT[patternType][0];
     *pXOut = (GRID_WIDTH / 2) - (pPattern->cols / 2);
-    *pYOut = -pPattern->rows;
+    // *pYOut = -pPattern->rows;
+    *pYOut = 0;
 }
 
 void resetInputStates()
@@ -525,7 +526,6 @@ void updateGameState()
             Pattern* pNextPattern = g_PatternLUT[g_GameState.nextPatternType][0];
             if (patternCollides(pNextPattern, 0, 0) & COLLIDES_COMMITTED)
             {
-                fprintf(stderr, "LOSE, COLLISION = 0x%04X\n", patternCollides(pNextPattern, 0, 0));
                 // Just clear all lines on lose
                 for (Uint8 y = 0; y < GRID_HEIGHT; ++y)
                 {
@@ -786,11 +786,14 @@ void renderNextPattern(SDL_Renderer* pRenderer)
     }
 
     TextSetEntryData(g_GameState.hNextText, pRenderer, "NEXT");
-    TextDrawEntry(
+    if (!TextDrawEntry(
         g_GameState.hNextText,
         pRenderer,
         NEXT_PATTERN_TEXT_X,
-        NEXT_PATTERN_TEXT_Y);
+        NEXT_PATTERN_TEXT_Y))
+    {
+        fprintf(stderr, "Failed to draw next text\n");
+    }
 
     // Don't render the actual pattern if the game is paused
     if (!g_GameState.renderCells)
@@ -856,11 +859,14 @@ void renderHoldPattern(SDL_Renderer* pRenderer)
     }
 
     TextSetEntryData(g_GameState.hHoldText, pRenderer, "HOLD");
-    TextDrawEntry(
+    if (!TextDrawEntry(
         g_GameState.hHoldText,
         pRenderer,
         HOLD_PATTERN_TEXT_X,
-        HOLD_PATTERN_TEXT_Y);
+        HOLD_PATTERN_TEXT_Y))
+    {
+        fprintf(stderr, "Failed to draw hold text\n");
+    }
 
     // Don't render the actual pattern if no pattern is held.
     if (!g_GameState.renderCells || patternType == PATTERN_NONE)
@@ -931,7 +937,10 @@ void renderStats(SDL_Renderer* pRenderer)
     char linesText[256];
     sprintf(linesText, "LINES: %hu", g_GameState.totalClearedLines);
     TextSetEntryData(g_GameState.hLinesText, pRenderer, linesText);
-    TextDrawEntry(g_GameState.hLinesText, pRenderer, linesTextX, linesTextY);
+    if (!TextDrawEntry(g_GameState.hLinesText, pRenderer, linesTextX, linesTextY))
+    {
+        fprintf(stderr, "Failed to draw lines text\n");
+    }
 
     // Level text
     if (g_GameState.hLevelText == TEXT_INVALID_HANDLE)
@@ -945,7 +954,10 @@ void renderStats(SDL_Renderer* pRenderer)
     char levelText[256];
     sprintf(levelText, "LEVEL: %hhu", g_GameState.currentLevel);
     TextSetEntryData(g_GameState.hLevelText, pRenderer, levelText);
-    TextDrawEntry(g_GameState.hLevelText, pRenderer, levelTextX, levelTextY);
+    if (!TextDrawEntry(g_GameState.hLevelText, pRenderer, levelTextX, levelTextY))
+    {
+        fprintf(stderr, "Failed to draw level text\n");
+    }
 }
 
 void renderPauseText(SDL_Renderer* pRenderer)
@@ -959,7 +971,14 @@ void renderPauseText(SDL_Renderer* pRenderer)
         }
 
         TextSetEntryData(g_GameState.hPausedText, pRenderer, "PAUSE");
-        TextDrawEntry(g_GameState.hPausedText, pRenderer, PAUSED_LOC_X, PAUSED_LOC_Y);
+        if (!TextDrawEntry(
+                g_GameState.hPausedText,
+                pRenderer,
+                PAUSED_LOC_X,
+                PAUSED_LOC_Y))
+        {
+            fprintf(stderr, "Failed to draw paused text\n");
+        }
     }
 }
 
@@ -974,7 +993,14 @@ void renderIntroText(SDL_Renderer* pRenderer)
         }
 
         TextSetEntryData(g_GameState.hIntroText, pRenderer, "PRESS SPACEBAR TO START");
-        TextDrawEntry(g_GameState.hIntroText, pRenderer, INTRO_LOC_X, INTRO_LOC_Y);
+        if (!TextDrawEntry(
+                g_GameState.hIntroText,
+                pRenderer,
+                INTRO_LOC_X,
+                INTRO_LOC_Y))
+        {
+            fprintf(stderr, "Failed to draw intro text\n");
+        }
     }
 }
 
