@@ -396,6 +396,32 @@ void checkInputs()
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Drop particles
+////////////////////////////////////////////////////////////////////////////////
+int dropParticleOffsetX()
+{
+    // Between -20 and 20
+    return (rand() % 40) - 20;
+}
+
+int dropParticleOffsetY()
+{
+    // Between -5 and 5
+    return (rand() % 10) - 5;
+}
+
+int dropParticleSize()
+{
+    // Between 2 and 8
+    return (rand() % 7) + 2;
+}
+
+int dropParticleShouldCreate()
+{
+    return rand() % 3;
+}
+
 void updateGameState()
 {
     Uint64 sinceLastDrop = g_GameState.currentFrame - g_GameState.lastDropFrame;
@@ -508,6 +534,7 @@ void updateGameState()
         const Sint8 OldPatternGridX = g_GameState.patternGridX;
         const Sint8 OldPatternGridY = g_GameState.patternGridY;
         g_GameState.patternGridY += patternHeight - 1;
+        const PatternType_t OldPatternType = g_GameState.currentPatternType;
         commitAndSpawnPattern();
 
         g_GameState.lastDropFrame = g_GameState.currentFrame;
@@ -515,6 +542,11 @@ void updateGameState()
         // Emit particles between the current pattern and the drop location
         for (int i = 0; i < (patternHeight - 1); ++i)
         {
+            if (!dropParticleShouldCreate())
+            {
+                continue;
+            }
+
             // Just one per grid position atm
             SquareParticle_t* pNewParticle = MakeParticle();
             if (!pNewParticle)
@@ -522,20 +554,29 @@ void updateGameState()
                 continue;
             }
 
-            // TODO: Offset X and Y randomly
-            // TODO: Randomly don't emit a new particle in the inner loop
-            // TODO: Shrink the particles over time
-            // TODO: Displace the particles over time (falling?)
-            // TODO: Color the particles according to the falling piece?
+            // TODO: hm, not sure if this looks best or if the particles should
+            // have their own dedicated color(s)
+            Color* pColor = 
+                ThemeGetOuterColor(g_GameState.pCurrentTheme, OldPatternType);
+            const SDL_Color SDLColor = {
+                pColor->r,
+                pColor->g,
+                pColor->b,
+                SDL_ALPHA_OPAQUE
+            };
+            ParticlesSetColor(SDLColor);
 
-            pNewParticle->Lifetime = i + 1;
+            pNewParticle->Size = dropParticleSize();
+            pNewParticle->Lifetime = i + 15;
             pNewParticle->X =
                 OldPatternGridX * GRID_CELL_WIDTH + 
                 GRID_UPPER_X + 
-                ((pPattern->cols * GRID_CELL_WIDTH) / 2);
+                ((pPattern->cols * GRID_CELL_WIDTH) / 2) +
+                dropParticleOffsetX();
             pNewParticle->Y =
                 (OldPatternGridY + i) * GRID_CELL_HEIGHT + 
-                GRID_UPPER_Y; 
+                GRID_UPPER_Y +
+                dropParticleOffsetY(); 
         }
     }
     else if (dropFrameTarget <= sinceLastDrop || g_GameState.inputDownPressed)
@@ -1273,7 +1314,10 @@ int main(int argc, char** argv)
         renderStats(pRender);
         renderPauseText(pRender);
         renderIntroText(pRender);
-        ParticlesRender(pRender);
+
+        const int LeftBound = GRID_UPPER_X;
+        const int RightBound = GRID_UPPER_X + GRID_WIDTH * GRID_CELL_WIDTH;
+        ParticlesRender(pRender, LeftBound, RightBound);
 
         Uint64 endTime = SDL_GetPerformanceCounter();
 
