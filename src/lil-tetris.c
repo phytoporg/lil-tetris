@@ -53,8 +53,8 @@
 #define HOLD_PATTERN_Y 100
 #define HOLD_PATTERN_BORDER 5
 
-#define SPAWN_DELAY_FRAMES 30
-#define CLEAR_LINES_FRAMES 30
+#define SPAWN_DELAY_FRAMES 45
+#define CLEAR_LINES_FRAMES 45
 #define CLEAR_LINES_FLASH_DURATION 10
 
 #define START_DROP_SPEED 2
@@ -365,6 +365,12 @@ void checkInputs()
         return;
     }
 
+    // Ignore other inputs if we're waiting to spawn
+    if (waitingToSpawn())
+    {
+        return;
+    }
+
     // Handle player inputs
     Pattern* pPattern = getCurrentPattern();
     if (g_GameState.inputLeftPressed && !g_GameState.inputRightPressed)
@@ -429,8 +435,7 @@ void checkInputs()
         }
     }
 
-    // Ignore hold inputs if we're still waiting to spawn
-    if (g_GameState.inputHoldPiece && !waitingToSpawn())
+    if (g_GameState.inputHoldPiece)
     {
         if (g_GameState.holdPatternType == PATTERN_NONE)
         {
