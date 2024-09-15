@@ -1,15 +1,14 @@
-- more leniency before pieces are committed when they collide (not sure how yet)
+- More leniency before pieces are committed when they collide (not sure how yet)
 -- it's hard to survive at high levels, gotta study other tetris implementations
 
+- Improve RNG
 - Add a real game over flow
 - Input hints on intro screen
 
 POLISH
 - Committing pieces
--- Animate color flash on committed piece
 -- Add some particles to accompany the flash
 -- Add commit sfx
--- Slightly displace stage downards
 
 - Level up
 -- Animated "level up!" text
@@ -18,6 +17,8 @@ POLISH
 - Line clear
 -- Animated block drop rather than teleporting into place
 -- Something more interesting than flashing presentation
+--- More particles !!
 
 - improve theme palettes
 - some kind of stage bg
+-- Thematically-appropriate particles systems?
