@@ -25,6 +25,9 @@
 #define GRID_CELL_HEIGHT 20
 #define GRID_CELL_BORDER 2
 
+#define GRID_DISPLACE_AMOUNT 3
+#define GRID_DISPLACE_DURATION 3
+
 #define STATS_LOC_X 445
 #define STATS_LOC_Y 300
 #define STATS_W 140
@@ -82,6 +85,7 @@ typedef struct
     PatternType_t currentPatternType;
     PatternType_t holdPatternType;
 	PatternTheme* pCurrentTheme;
+    ParticleSystem_t DropParticles;
     Sint8      patternGridX;
     Sint8      patternGridY;
     Uint8      currentPatternRotation;
@@ -304,6 +308,16 @@ void spawnNextPattern()
         &(g_GameState.patternGridX),
         &(g_GameState.patternGridY));
     g_GameState.lastSpawnFrame = g_GameState.currentFrame;
+}
+
+void getGridPosition(Uint8* pXOut, Uint8* pYOut)
+{
+    Uint64 sincePreSpawn = g_GameState.currentFrame - g_GameState.preSpawnFrame;
+    Uint8 yOffset = 
+        (sincePreSpawn < GRID_DISPLACE_DURATION) ? GRID_DISPLACE_AMOUNT : 0;
+
+    *pXOut = GRID_UPPER_X;
+    *pYOut = GRID_UPPER_Y + yOffset;
 }
 
 void checkInputs()
@@ -581,7 +595,8 @@ void updateGameState()
             }
 
             // Just one per grid position atm
-            SquareParticle_t* pNewParticle = MakeParticle();
+            SquareParticle_t* pNewParticle = 
+                ParticleSystemMakeParticle(&(g_GameState.DropParticles));
             if (!pNewParticle)
             {
                 continue;
@@ -597,18 +612,22 @@ void updateGameState()
                 pColor->b,
                 SDL_ALPHA_OPAQUE
             };
-            ParticlesSetColor(SDLColor);
+            g_GameState.DropParticles.Color = SDLColor;
+
+            Uint8 GridBaseX;
+            Uint8 GridBaseY;
+            getGridPosition(&GridBaseX, &GridBaseY);
 
             pNewParticle->Size = dropParticleSize();
             pNewParticle->Lifetime = i + 15;
             pNewParticle->X =
                 OldPatternGridX * GRID_CELL_WIDTH + 
-                GRID_UPPER_X + 
+                GridBaseX + 
                 ((pPattern->cols * GRID_CELL_WIDTH) / 2) +
                 dropParticleOffsetX();
             pNewParticle->Y =
                 (OldPatternGridY + i) * GRID_CELL_HEIGHT + 
-                GRID_UPPER_Y +
+                GridBaseY +
                 dropParticleOffsetY(); 
         }
     }
@@ -789,6 +808,10 @@ void renderShadowPattern(SDL_Renderer* pRenderer)
         return;
     }
 
+    Uint8 GridBaseX;
+    Uint8 GridBaseY;
+    getGridPosition(&GridBaseX, &GridBaseY);
+
     int toDrawIndex = 0;
     SDL_Rect toDraw[4];
     for (int y = 0; y < pPattern->rows; ++y) {
@@ -796,8 +819,8 @@ void renderShadowPattern(SDL_Renderer* pRenderer)
             if (pPattern->occupancy[y][x])
             {
                 SDL_Rect* pRect = &toDraw[toDrawIndex];
-                pRect->x = (x + ShadowPatternX) * GRID_CELL_WIDTH + GRID_UPPER_X;
-                pRect->y = (y + ShadowPatternY) * GRID_CELL_HEIGHT + GRID_UPPER_Y;
+                pRect->x = (x + ShadowPatternX) * GRID_CELL_WIDTH + GridBaseX;
+                pRect->y = (y + ShadowPatternY) * GRID_CELL_HEIGHT + GridBaseY;
                 pRect->w = GRID_CELL_WIDTH;
                 pRect->h = GRID_CELL_HEIGHT;
 
@@ -827,6 +850,10 @@ void renderCurrentPattern(SDL_Renderer* pRenderer)
 
     PatternType_t patternType = g_GameState.currentPatternType;
     Pattern* pPattern = getCurrentPattern();
+
+    Uint8 GridBaseX;
+    Uint8 GridBaseY;
+    getGridPosition(&GridBaseX, &GridBaseY);
 
     int toDrawIndex = 0;
     SDL_Rect toDraw[4];
@@ -868,8 +895,8 @@ void renderCurrentPattern(SDL_Renderer* pRenderer)
                 }
 
                 SDL_Rect* pRect = &toDraw[toDrawIndex];
-                pRect->x = GridX * GRID_CELL_WIDTH + GRID_UPPER_X;
-                pRect->y = GridY * GRID_CELL_HEIGHT + GRID_UPPER_Y;
+                pRect->x = GridX * GRID_CELL_WIDTH + GridBaseX;
+                pRect->y = GridY * GRID_CELL_HEIGHT + GridBaseY;
                 pRect->w = GRID_CELL_WIDTH;
                 pRect->h = GRID_CELL_HEIGHT;
 
@@ -1170,6 +1197,10 @@ void renderGrid(SDL_Renderer* pRenderer)
         pArray->NumRects = 0;
     }
 
+    Uint8 GridBaseX;
+    Uint8 GridBaseY;
+    getGridPosition(&GridBaseX, &GridBaseY);
+
     // Populate SDL Rect Arrays data structures for rendering
     for (Uint8 y = 0; y < GRID_HEIGHT; ++y) {
         for (Uint8 x = 0; x < GRID_WIDTH; ++x) {
@@ -1185,8 +1216,8 @@ void renderGrid(SDL_Renderer* pRenderer)
             int rectIndex = pRectArray->NumRects;
             SDL_Rect* pRect = &pRectArray->Rects[rectIndex];
 
-            pRect->x = pCell->x * GRID_CELL_WIDTH + GRID_UPPER_X;
-            pRect->y = pCell->y * GRID_CELL_HEIGHT + GRID_UPPER_Y;
+            pRect->x = pCell->x * GRID_CELL_WIDTH + GridBaseX;
+            pRect->y = pCell->y * GRID_CELL_HEIGHT + GridBaseY;
             pRect->w = GRID_CELL_WIDTH;
             pRect->h = GRID_CELL_HEIGHT;
 
@@ -1203,6 +1234,7 @@ void renderGrid(SDL_Renderer* pRenderer)
             pArray->NumRects,
             NULL, NULL);
     }
+
 
     // Render flashing lines if we're clearing lines
     if (isClearingLines() && g_GameState.renderCells)
@@ -1226,8 +1258,8 @@ void renderGrid(SDL_Renderer* pRenderer)
                 {
                     GridCell* pCell = &g_Grid[y][x];
                     SDL_Rect* pRect = &FlashRects[rectIndex];
-                    pRect->x = pCell->x * GRID_CELL_WIDTH + GRID_UPPER_X;
-                    pRect->y = pCell->y * GRID_CELL_HEIGHT + GRID_UPPER_Y;
+                    pRect->x = pCell->x * GRID_CELL_WIDTH + GridBaseX;
+                    pRect->y = pCell->y * GRID_CELL_HEIGHT + GridBaseY;
                     pRect->w = GRID_CELL_WIDTH;
                     pRect->h = GRID_CELL_HEIGHT;
                     ++rectIndex;
@@ -1291,7 +1323,7 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    ParticlesInitialize();
+    ParticleSystemInitialize(&(g_GameState.DropParticles));
 
     srand(time(NULL));
 
@@ -1385,7 +1417,7 @@ int main(int argc, char** argv)
         }
 
         updateGameState();
-        ParticlesTick();
+        ParticleSystemTick(&(g_GameState.DropParticles));
 
         checkInputs();
         renderGrid(pRender);
@@ -1397,9 +1429,17 @@ int main(int argc, char** argv)
         renderPauseText(pRender);
         renderIntroText(pRender);
 
-        const int LeftBound = GRID_UPPER_X;
-        const int RightBound = GRID_UPPER_X + GRID_WIDTH * GRID_CELL_WIDTH;
-        ParticlesRender(pRender, LeftBound, RightBound);
+        Uint8 GridBaseX;
+        Uint8 GridBaseY;
+        getGridPosition(&GridBaseX, &GridBaseY);
+
+        const int LeftBound = GridBaseX;
+        const int RightBound = GridBaseX + GRID_WIDTH * GRID_CELL_WIDTH;
+        ParticleSystemRender(
+            &(g_GameState.DropParticles),
+            pRender,
+            LeftBound,
+            RightBound);
 
         Uint64 endTime = SDL_GetPerformanceCounter();
 

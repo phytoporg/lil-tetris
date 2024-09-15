@@ -2,6 +2,9 @@
 #include <stdbool.h>
 #include <assert.h>
 
+// Should be way more than we need
+#define MAX_PARTICLES 255
+
 typedef struct {
     Uint8 FramesSinceSpawn;
     Uint8 Lifetime;
@@ -10,31 +13,35 @@ typedef struct {
     int   Size;
 } SquareParticle_t;
 
-// Should be way more than we need
-#define MAX_PARTICLES 255
+typedef struct {
+    SquareParticle_t Particles[MAX_PARTICLES];
+    bool             Valid[MAX_PARTICLES];
+    bool             Initialized;
+    Uint8            Count;
+    SDL_Color        Color;
+} ParticleSystem_t;
 
-// Parallel arrays
-static SquareParticle_t g_Particles[MAX_PARTICLES];
-static bool g_ValidParticles[MAX_PARTICLES];
-static bool g_ParticlesInitialized = false;
-static Uint8 g_ParticleCount = 0;
-static SDL_Color g_ParticleColor = { 255, 255, 255, SDL_ALPHA_OPAQUE };
-
-// i want to emit a stream of particles which die after some time
-// let's start there
-
-void ParticlesInitialize()
+void ParticleSystemInitialize(ParticleSystem_t* pParticleSystem)
 {
-    memset(g_Particles, 0, sizeof(g_Particles));
-    memset(g_ValidParticles, 0, sizeof(g_ValidParticles));
-    g_ParticlesInitialized = true;
+    if (!pParticleSystem)
+    {
+        return;
+    }
+
+    memset(pParticleSystem->Particles, 0, sizeof(pParticleSystem->Particles));
+    memset(pParticleSystem->Valid, 0, sizeof(pParticleSystem->Valid));
+    pParticleSystem->Count = 0;
+    pParticleSystem->Initialized = true;
+
+    SDL_Color kWhite = { 255, 255, 255, SDL_ALPHA_OPAQUE };
+    pParticleSystem->Color = kWhite;
 }
 
-SquareParticle_t* MakeParticle()
+SquareParticle_t* ParticleSystemMakeParticle(ParticleSystem_t* pParticleSystem)
 {
-    assert(g_ParticlesInitialized);
+    assert(pParticleSystem->Initialized);
 
-    if (g_ParticleCount >= MAX_PARTICLES)
+    if (pParticleSystem->Count >= MAX_PARTICLES)
     {
         fprintf(stderr, "Exceeded max particle count\n");
         return NULL;
@@ -44,7 +51,7 @@ SquareParticle_t* MakeParticle()
     Sint8 nextParticleIndex = -1;
     for (Uint8 i = 0; i < MAX_PARTICLES; ++i)
     {
-        if (!g_ValidParticles[i])
+        if (!pParticleSystem->Valid[i])
         {
             nextParticleIndex = i;
             break;
@@ -59,34 +66,34 @@ SquareParticle_t* MakeParticle()
         return NULL;
     }
 
-    SquareParticle_t* pParticle = &(g_Particles[nextParticleIndex]);
+    SquareParticle_t* pParticle = &(pParticleSystem->Particles[nextParticleIndex]);
     memset(pParticle, 0, sizeof(*pParticle));
 
-    g_ValidParticles[nextParticleIndex] = true;
-    ++g_ParticleCount;
+    pParticleSystem->Valid[nextParticleIndex] = true;
+    ++pParticleSystem->Count;
 
     return pParticle;
 }
 
-void ParticlesTick()
+void ParticleSystemTick(ParticleSystem_t* pParticleSystem)
 {
-    assert(g_ParticlesInitialized);
+    assert(pParticleSystem->Initialized);
 
-    Sint8 particlesRemaining = g_ParticleCount;
+    Sint8 particlesRemaining = pParticleSystem->Count;
     Uint8 index = 0;
     while(particlesRemaining > 0)
     {
-        if (g_ValidParticles[index])
+        if (pParticleSystem->Valid[index])
         {
             // TODO
-            SquareParticle_t* pParticle = &(g_Particles[index]);
+            SquareParticle_t* pParticle = &(pParticleSystem->Particles[index]);
             pParticle->FramesSinceSpawn++;
 
             if (pParticle->FramesSinceSpawn == pParticle->Lifetime)
             {
                 // This particle has expired
-                g_ValidParticles[index] = false;
-                g_ParticleCount--;
+                pParticleSystem->Valid[index] = false;
+                pParticleSystem->Count--;
             }
             else if (pParticle->FramesSinceSpawn > 6 && 
                      (pParticle->FramesSinceSpawn % 4 == 0))
@@ -101,19 +108,23 @@ void ParticlesTick()
     }
 }
 
-void ParticlesRender(SDL_Renderer* pRenderer, int leftBounds, int rightBounds)
+void ParticleSystemRender(
+    ParticleSystem_t* pParticleSystem,
+    SDL_Renderer* pRenderer,
+    int leftBounds,
+    int rightBounds)
 {
-    assert(g_ParticlesInitialized);
+    assert(pParticleSystem->Initialized);
 
     SDL_Rect particleRects[MAX_PARTICLES];
-    Sint8 particlesRemaining = g_ParticleCount;
+    Sint8 particlesRemaining = pParticleSystem->Count;
     Uint8 index = 0;
     Uint8 numRects = 0;
     while(particlesRemaining > 0)
     {
-        if (g_ValidParticles[index])
+        if (pParticleSystem->Valid[index])
         {
-            SquareParticle_t* pParticle = &(g_Particles[index]);
+            SquareParticle_t* pParticle = &(pParticleSystem->Particles[index]);
 
             // Don't render out of bounds
             if (pParticle->X > leftBounds && 
@@ -142,20 +153,10 @@ void ParticlesRender(SDL_Renderer* pRenderer, int leftBounds, int rightBounds)
 
     SDL_SetRenderDrawColor(
         pRenderer,
-        g_ParticleColor.r,
-        g_ParticleColor.g,
-        g_ParticleColor.b,
-        g_ParticleColor.a);
+        pParticleSystem->Color.r,
+        pParticleSystem->Color.g,
+        pParticleSystem->Color.b,
+        pParticleSystem->Color.a);
     SDL_RenderFillRects(pRenderer, particleRects, numRects);
 }
 
-Uint8 ParticlesGetCount()
-{
-    assert(g_ParticlesInitialized);
-    return g_ParticleCount;
-}
-
-void ParticlesSetColor(SDL_Color newColor)
-{
-    g_ParticleColor = newColor;
-}
