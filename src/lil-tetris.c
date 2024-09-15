@@ -50,7 +50,7 @@
 #define HOLD_PATTERN_Y 100
 #define HOLD_PATTERN_BORDER 5
 
-#define SPAWN_DELAY_FRAMES 40
+#define SPAWN_DELAY_FRAMES 30
 #define CLEAR_LINES_FRAMES 60
 #define CLEAR_LINES_FLASH_DURATION 10
 
@@ -87,6 +87,7 @@ typedef struct
     Uint8      currentPatternRotation;
     Uint64     currentFrame;
     Uint64     lastDropFrame;
+    Uint64     preSpawnFrame;
     Uint64     lastSpawnFrame;
     Uint8      dropSpeed;
     Sint8      clearLines[GRID_HEIGHT];
@@ -111,6 +112,7 @@ typedef struct
     bool       toggleFlash;
     bool       isPaused;
     bool       isIntro;
+    bool       isGameOver;
     bool       renderCells;
 } GameState;
 
@@ -163,6 +165,7 @@ void initializeGameState()
     g_GameState.currentPatternRotation = 0;
     g_GameState.currentFrame = 0;
     g_GameState.lastDropFrame = 0;
+    g_GameState.preSpawnFrame = 0;
     g_GameState.lastSpawnFrame = 0;
     g_GameState.dropSpeed = START_DROP_SPEED; // Drops per second
     memset(g_GameState.clearLines, -1, sizeof(g_GameState.clearLines));
@@ -178,6 +181,7 @@ void initializeGameState()
     g_GameState.toggleFlash = false;
     g_GameState.isPaused = false;
     g_GameState.isIntro = true;
+    g_GameState.isGameOver = false;
     g_GameState.renderCells = true;
 
     getSpawnPosition(
@@ -245,11 +249,24 @@ Uint8 patternCollides(Pattern* pPattern, Sint8 dX, Sint8 dY)
 
 bool waitingToSpawn()
 {
-    Uint64 sinceLastSpawn = g_GameState.currentFrame - g_GameState.lastSpawnFrame;
-    return sinceLastSpawn < SPAWN_DELAY_FRAMES && g_GameState.lastSpawnFrame > 0;
+    Uint64 sincePreSpawn = g_GameState.currentFrame - g_GameState.preSpawnFrame;
+    return sincePreSpawn < SPAWN_DELAY_FRAMES && g_GameState.preSpawnFrame > 0;
 }
 
-void commitAndSpawnPattern()
+bool isSpawnFrame()
+{
+    Uint64 sincePreSpawn = g_GameState.currentFrame - g_GameState.preSpawnFrame;
+    return sincePreSpawn == SPAWN_DELAY_FRAMES && g_GameState.preSpawnFrame > 0;
+}
+
+bool isClearingLines()
+{
+    const bool ClearingLines = g_GameState.clearLines[0] >= 0;
+    Uint64 sinceClearedLines = g_GameState.currentFrame - g_GameState.clearLinesFrame;
+    return sinceClearedLines < CLEAR_LINES_FRAMES;
+}
+
+void commitCurrentPattern()
 {
     Pattern* pPattern = getCurrentPattern();
     for (int y = 0; y < pPattern->rows; ++y) {
@@ -261,6 +278,8 @@ void commitAndSpawnPattern()
 
                 if (gridY < 0)
                 {
+                    // If we commit any cells above the grid, the game is over
+                    g_GameState.isGameOver = true;
                     continue;
                 }
 
@@ -268,7 +287,15 @@ void commitAndSpawnPattern()
             }
         }
     }
+}
 
+void beginSpawnNextPattern()
+{
+    g_GameState.preSpawnFrame = g_GameState.currentFrame;
+}
+
+void spawnNextPattern()
+{
     g_GameState.currentPatternType = g_GameState.nextPatternType;
     g_GameState.nextPatternType = randomPatternType();
     g_GameState.currentPatternRotation = 0;
@@ -276,8 +303,6 @@ void commitAndSpawnPattern()
         g_GameState.currentPatternType,
         &(g_GameState.patternGridX),
         &(g_GameState.patternGridY));
-
-
     g_GameState.lastSpawnFrame = g_GameState.currentFrame;
 }
 
@@ -425,7 +450,6 @@ int dropParticleShouldCreate()
 void updateGameState()
 {
     Uint64 sinceLastDrop = g_GameState.currentFrame - g_GameState.lastDropFrame;
-    Uint64 sinceLastSpawn = g_GameState.currentFrame - g_GameState.lastSpawnFrame;
     Uint64 dropFrameTarget = (FPS / g_GameState.dropSpeed);
 
     if (g_GameState.isPaused || g_GameState.isIntro)
@@ -441,11 +465,18 @@ void updateGameState()
         g_GameState.currentFrame++;
         return;
     }
+    else if (isSpawnFrame())
+    {
+        commitCurrentPattern();
+        spawnNextPattern();
+    }
 
     const bool ClearingLines = g_GameState.clearLines[0] >= 0;
     if (ClearingLines)
     {
-        Uint64 sinceClearedLines = g_GameState.currentFrame - g_GameState.clearLinesFrame;
+        Uint64 sinceClearedLines = 
+            g_GameState.currentFrame -
+            g_GameState.clearLinesFrame;
         if (sinceClearedLines >= CLEAR_LINES_FRAMES)
         {
             // Nuke out the cleared lines
@@ -535,7 +566,9 @@ void updateGameState()
         const Sint8 OldPatternGridY = g_GameState.patternGridY;
         g_GameState.patternGridY += patternHeight - 1;
         const PatternType_t OldPatternType = g_GameState.currentPatternType;
-        commitAndSpawnPattern();
+
+        commitCurrentPattern();
+        beginSpawnNextPattern();
 
         g_GameState.lastDropFrame = g_GameState.currentFrame;
 
@@ -587,42 +620,42 @@ void updateGameState()
         }
         else
         {
-            commitAndSpawnPattern();
+            commitCurrentPattern();
+            beginSpawnNextPattern();
         }
 
         g_GameState.lastDropFrame = g_GameState.currentFrame;
     }
 
+    // Check losing condition
+    if (g_GameState.isGameOver)
+    {
+        // Just clear all lines on lose
+        for (Uint8 y = 0; y < GRID_HEIGHT; ++y)
+        {
+            g_GameState.clearLines[y] = y;
+        }
+
+        g_GameState.clearLinesFrame = g_GameState.currentFrame;
+        g_GameState.currentFrame++;
+
+        // Reset stats and level on loss
+        g_GameState.totalClearedLines = 0;
+        g_GameState.currentLevel = 1;
+        g_GameState.pCurrentTheme = g_DefaultThemes;
+        g_GameState.dropSpeed = START_DROP_SPEED;
+        g_GameState.holdPatternType = PATTERN_NONE;
+        g_GameState.currentPatternType = randomPatternType();
+        g_GameState.nextPatternType = randomPatternType();
+
+        // TODO: do this elsewhere?
+        g_GameState.isGameOver = false;
+        return;
+    }
+
     // Checking cleared lines or lose condition if there was a drop
     if (g_GameState.lastDropFrame == g_GameState.currentFrame)
     {
-        // Check losing condition
-        if (g_GameState.lastSpawnFrame == g_GameState.currentFrame)
-        {
-            Pattern* pNextPattern = g_PatternLUT[g_GameState.nextPatternType][0];
-            if (patternCollides(pNextPattern, 0, 0) & COLLIDES_COMMITTED)
-            {
-                // Just clear all lines on lose
-                for (Uint8 y = 0; y < GRID_HEIGHT; ++y)
-                {
-                    g_GameState.clearLines[y] = y;
-                }
-
-                g_GameState.clearLinesFrame = g_GameState.currentFrame;
-                g_GameState.currentFrame++;
-
-                // Reset stats and level on loss
-                g_GameState.totalClearedLines = 0;
-                g_GameState.currentLevel = 1;
-                g_GameState.pCurrentTheme = g_DefaultThemes;
-                g_GameState.dropSpeed = START_DROP_SPEED;
-                g_GameState.holdPatternType = PATTERN_NONE;
-                g_GameState.currentPatternType = randomPatternType();
-                g_GameState.nextPatternType = randomPatternType();
-                return;
-            }
-        }
-        
         memset(g_GameState.clearLines, -1, sizeof(g_GameState.clearLines));
 
         // Check for cleared lines
@@ -792,11 +825,6 @@ void renderCurrentPattern(SDL_Renderer* pRenderer)
         return;
     }
 
-    if (waitingToSpawn())
-    {
-        return;
-    }
-
     PatternType_t patternType = g_GameState.currentPatternType;
     Pattern* pPattern = getCurrentPattern();
 
@@ -815,6 +843,30 @@ void renderCurrentPattern(SDL_Renderer* pRenderer)
                     continue;
                 }
 
+                if (isClearingLines())
+                {
+                    // Don't render any pattern cells that are being cleared
+                    bool shouldContinue = false;
+                    Sint8 clearLineIndex = 0;
+                    Sint8 y = g_GameState.clearLines[clearLineIndex];
+                    while (y >= 0 && clearLineIndex < sizeof(g_GameState.clearLines))
+                    {
+                        if (y == GridY)
+                        {
+                            shouldContinue = true;
+                            break;
+                        }
+
+                        ++clearLineIndex;
+                        y = g_GameState.clearLines[clearLineIndex];
+                    }
+
+                    if (shouldContinue)
+                    {
+                        continue;
+                    }
+                }
+
                 SDL_Rect* pRect = &toDraw[toDrawIndex];
                 pRect->x = GridX * GRID_CELL_WIDTH + GRID_UPPER_X;
                 pRect->y = GridY * GRID_CELL_HEIGHT + GRID_UPPER_Y;
@@ -826,12 +878,42 @@ void renderCurrentPattern(SDL_Renderer* pRenderer)
         }
     }
 
+    Color* pInnerColor = NULL;
+    Color* pOuterColor = NULL;
+    if (waitingToSpawn())
+    {
+        // Animate color, blend from white to the target color
+        Color* pThemeOuterColor = 
+            ThemeGetOuterColor(g_GameState.pCurrentTheme, (int)patternType);
+        Color* pThemeInnerColor = 
+            ThemeGetInnerColor(g_GameState.pCurrentTheme, (int)patternType);
+
+        Uint64 sincePreSpawn = g_GameState.currentFrame - g_GameState.preSpawnFrame;
+        float t = (float)sincePreSpawn / SPAWN_DELAY_FRAMES;
+        const Color kWhite = { 255, 255, 255 };
+        Color blendedInner = {
+            kWhite.r * (1.0f - t) + pThemeInnerColor->r * t,
+            kWhite.g * (1.0f - t) + pThemeInnerColor->g * t,
+            kWhite.b * (1.0f - t) + pThemeInnerColor->b * t,
+        };
+
+        Color blendedOuter = {
+            kWhite.r * (1.0f - t) + pThemeOuterColor->r * t,
+            kWhite.g * (1.0f - t) + pThemeOuterColor->g * t,
+            kWhite.b * (1.0f - t) + pThemeOuterColor->b * t,
+        };
+
+        pInnerColor = &blendedInner;
+        pOuterColor = &blendedOuter;
+    }
+
     renderCellArray(
         pRenderer,
         g_GameState.currentPatternType,
         toDraw,
         toDrawIndex,
-        NULL, NULL);
+        pInnerColor,
+        pOuterColor);
 }
 
 void renderNextPattern(SDL_Renderer* pRenderer)
@@ -1123,10 +1205,10 @@ void renderGrid(SDL_Renderer* pRenderer)
     }
 
     // Render flashing lines if we're clearing lines
-    const bool ClearingLines = g_GameState.clearLines[0] >= 0;
-    Uint64 sinceClearedLines = g_GameState.currentFrame - g_GameState.clearLinesFrame;
-    if (sinceClearedLines < CLEAR_LINES_FRAMES && g_GameState.renderCells)
+    if (isClearingLines() && g_GameState.renderCells)
     {
+        const Uint64 sinceClearedLines = 
+            g_GameState.currentFrame - g_GameState.clearLinesFrame;
         if ((sinceClearedLines % CLEAR_LINES_FLASH_DURATION) == 0)
         {
             g_GameState.toggleFlash = g_GameState.toggleFlash ? false : true;
