@@ -5,36 +5,43 @@
 // Should be way more than we need
 #define MAX_PARTICLES 255
 
+typedef enum
+{
+    BEHAVIOR_DROP,
+    BEHAVIOR_LINE_CLEAR
+} ParticleBehavior;
+
 typedef struct {
-    Uint8 FramesSinceSpawn;
-    Uint8 Lifetime;
-    int   X;
-    int   Y;
-    int   Size;
+    Uint8     FramesSinceSpawn;
+    Uint8     Lifetime;
+    int       X;
+    int       Y;
+    int       Size;
+    SDL_Color Color;
 } SquareParticle_t;
 
 typedef struct {
+    ParticleBehavior Behavior;
     SquareParticle_t Particles[MAX_PARTICLES];
     bool             Valid[MAX_PARTICLES];
     bool             Initialized;
     Uint8            Count;
-    SDL_Color        Color;
 } ParticleSystem_t;
 
-void ParticleSystemInitialize(ParticleSystem_t* pParticleSystem)
+void ParticleSystemInitialize(
+    ParticleSystem_t* pParticleSystem,
+    ParticleBehavior behavior)
 {
     if (!pParticleSystem)
     {
         return;
     }
 
+    pParticleSystem->Behavior = behavior;
     memset(pParticleSystem->Particles, 0, sizeof(pParticleSystem->Particles));
     memset(pParticleSystem->Valid, 0, sizeof(pParticleSystem->Valid));
     pParticleSystem->Count = 0;
     pParticleSystem->Initialized = true;
-
-    SDL_Color kWhite = { 255, 255, 255, SDL_ALPHA_OPAQUE };
-    pParticleSystem->Color = kWhite;
 }
 
 SquareParticle_t* ParticleSystemMakeParticle(ParticleSystem_t* pParticleSystem)
@@ -89,17 +96,25 @@ void ParticleSystemTick(ParticleSystem_t* pParticleSystem)
             SquareParticle_t* pParticle = &(pParticleSystem->Particles[index]);
             pParticle->FramesSinceSpawn++;
 
-            if (pParticle->FramesSinceSpawn == pParticle->Lifetime)
+            // TODO: CHECK BEHAVIOR
+            if (pParticleSystem->Behavior == BEHAVIOR_DROP)
             {
-                // This particle has expired
-                pParticleSystem->Valid[index] = false;
-                pParticleSystem->Count--;
+                if (pParticle->FramesSinceSpawn == pParticle->Lifetime)
+                {
+                    // This particle has expired
+                    pParticleSystem->Valid[index] = false;
+                    pParticleSystem->Count--;
+                }
+                else if (pParticle->FramesSinceSpawn > 6 && 
+                         (pParticle->FramesSinceSpawn % 4 == 0))
+                {
+                    pParticle->Y += 2;
+                    pParticle->Size = (pParticle->Size > 2 ? pParticle->Size - 1 : 2);
+                }
             }
-            else if (pParticle->FramesSinceSpawn > 6 && 
-                     (pParticle->FramesSinceSpawn % 4 == 0))
+            else if (pParticleSystem->Behavior == BEHAVIOR_LINE_CLEAR)
             {
-                pParticle->Y += 2;
-                pParticle->Size = (pParticle->Size > 2 ? pParticle->Size - 1 : 2);
+                // TODO
             }
 
             particlesRemaining--;
@@ -116,10 +131,8 @@ void ParticleSystemRender(
 {
     assert(pParticleSystem->Initialized);
 
-    SDL_Rect particleRects[MAX_PARTICLES];
     Sint8 particlesRemaining = pParticleSystem->Count;
     Uint8 index = 0;
-    Uint8 numRects = 0;
     while(particlesRemaining > 0)
     {
         if (pParticleSystem->Valid[index])
@@ -130,33 +143,25 @@ void ParticleSystemRender(
             if (pParticle->X > leftBounds && 
                 (pParticle->X + pParticle->Size) < rightBounds)
             {
-                SDL_Rect* pRect = (&particleRects[numRects]);
+                SDL_Rect rect;
 
-                pRect->x = pParticle->X;
-                pRect->y = pParticle->Y;
-                pRect->w = pParticle->Size;
-                pRect->h = pParticle->Size;
+                rect.x = pParticle->X;
+                rect.y = pParticle->Y;
+                rect.w = pParticle->Size;
+                rect.h = pParticle->Size;
 
-                numRects++;
+                SDL_SetRenderDrawColor(
+                    pRenderer,
+                    pParticle->Color.r,
+                    pParticle->Color.g,
+                    pParticle->Color.b,
+                    pParticle->Color.a);
+                SDL_RenderFillRect(pRenderer, &rect);
             }
 
             particlesRemaining--;
         }
         index++;
     }
-
-    if (!numRects)
-    {
-        // Nothing to draw
-        return;
-    }
-
-    SDL_SetRenderDrawColor(
-        pRenderer,
-        pParticleSystem->Color.r,
-        pParticleSystem->Color.g,
-        pParticleSystem->Color.b,
-        pParticleSystem->Color.a);
-    SDL_RenderFillRects(pRenderer, particleRects, numRects);
 }
 

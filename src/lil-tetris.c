@@ -54,7 +54,7 @@
 #define HOLD_PATTERN_BORDER 5
 
 #define SPAWN_DELAY_FRAMES 30
-#define CLEAR_LINES_FRAMES 60
+#define CLEAR_LINES_FRAMES 30
 #define CLEAR_LINES_FLASH_DURATION 10
 
 #define START_DROP_SPEED 2
@@ -86,6 +86,7 @@ typedef struct
     PatternType_t holdPatternType;
 	PatternTheme* pCurrentTheme;
     ParticleSystem_t DropParticles;
+    ParticleSystem_t LineClearParticles;
     Sint8      patternGridX;
     Sint8      patternGridY;
     Uint8      currentPatternRotation;
@@ -113,7 +114,6 @@ typedef struct
     bool       inputHoldPiece;
     bool       inputPauseGame;
     bool       inputBeginGame;
-    bool       toggleFlash;
     bool       isPaused;
     bool       isIntro;
     bool       isGameOver;
@@ -182,7 +182,6 @@ void initializeGameState()
     g_GameState.hLevelText = TEXT_INVALID_HANDLE;
     g_GameState.hPausedText = TEXT_INVALID_HANDLE;
     g_GameState.hIntroText = TEXT_INVALID_HANDLE;
-    g_GameState.toggleFlash = false;
     g_GameState.isPaused = false;
     g_GameState.isIntro = true;
     g_GameState.isGameOver = false;
@@ -267,7 +266,26 @@ bool isClearingLines()
 {
     const bool ClearingLines = g_GameState.clearLines[0] >= 0;
     Uint64 sinceClearedLines = g_GameState.currentFrame - g_GameState.clearLinesFrame;
-    return sinceClearedLines < CLEAR_LINES_FRAMES;
+    return ClearingLines || sinceClearedLines < CLEAR_LINES_FRAMES;
+}
+
+bool isLineBeingCleared(Sint8 gridY)
+{
+    // Don't render any pattern cells that are being cleared
+    Sint8 clearLineIndex = 0;
+    Sint8 y = g_GameState.clearLines[clearLineIndex];
+    while (y >= 0 && clearLineIndex < sizeof(g_GameState.clearLines))
+    {
+        if (y == gridY)
+        {
+            return true;
+        }
+
+        ++clearLineIndex;
+        y = g_GameState.clearLines[clearLineIndex];
+    }
+
+    return false;
 }
 
 void commitCurrentPattern()
@@ -461,6 +479,43 @@ int dropParticleShouldCreate()
     return rand() % 3;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Line clear particles
+////////////////////////////////////////////////////////////////////////////////
+void emitLineClearParticles(Uint8 y)
+{
+    Uint8 GridBaseX;
+    Uint8 GridBaseY;
+    getGridPosition(&GridBaseX, &GridBaseY);
+
+    for (Sint8 x = 0; x < GRID_WIDTH; ++x)
+    {
+        SquareParticle_t* pNewParticle = 
+            ParticleSystemMakeParticle(&(g_GameState.DropParticles));
+        pNewParticle->X = x;
+
+        pNewParticle->Size = 5;
+        pNewParticle->Lifetime = 15;
+        pNewParticle->X =
+            x * GRID_CELL_WIDTH + 
+            GridBaseX + 
+            (GRID_CELL_WIDTH / 2);
+        pNewParticle->Y =
+            y * GRID_CELL_HEIGHT + 
+            GridBaseY;
+
+        Color* pColor = 
+            ThemeGetInnerColor(g_GameState.pCurrentTheme, g_Grid[y][x].patternType);
+        SDL_Color color = {
+            pColor->r,
+            pColor->g,
+            pColor->b,
+            SDL_ALPHA_OPAQUE
+        };
+        pNewParticle->Color = color;
+    }
+}
+
 void updateGameState()
 {
     Uint64 sinceLastDrop = g_GameState.currentFrame - g_GameState.lastDropFrame;
@@ -485,8 +540,7 @@ void updateGameState()
         spawnNextPattern();
     }
 
-    const bool ClearingLines = g_GameState.clearLines[0] >= 0;
-    if (ClearingLines)
+    if (isClearingLines())
     {
         Uint64 sinceClearedLines = 
             g_GameState.currentFrame -
@@ -612,7 +666,7 @@ void updateGameState()
                 pColor->b,
                 SDL_ALPHA_OPAQUE
             };
-            g_GameState.DropParticles.Color = SDLColor;
+            pNewParticle->Color = SDLColor;
 
             Uint8 GridBaseX;
             Uint8 GridBaseY;
@@ -691,6 +745,7 @@ void updateGameState()
 
             if (lineCleared)
             {
+                emitLineClearParticles(y);
                 g_GameState.clearLines[linesCleared] = y;
                 ++linesCleared;
             }
@@ -870,28 +925,10 @@ void renderCurrentPattern(SDL_Renderer* pRenderer)
                     continue;
                 }
 
-                if (isClearingLines())
+                if (isLineBeingCleared(GridY))
                 {
-                    // Don't render any pattern cells that are being cleared
-                    bool shouldContinue = false;
-                    Sint8 clearLineIndex = 0;
-                    Sint8 y = g_GameState.clearLines[clearLineIndex];
-                    while (y >= 0 && clearLineIndex < sizeof(g_GameState.clearLines))
-                    {
-                        if (y == GridY)
-                        {
-                            shouldContinue = true;
-                            break;
-                        }
-
-                        ++clearLineIndex;
-                        y = g_GameState.clearLines[clearLineIndex];
-                    }
-
-                    if (shouldContinue)
-                    {
-                        continue;
-                    }
+                    // Don't render cells that are being cleared
+                    continue;
                 }
 
                 SDL_Rect* pRect = &toDraw[toDrawIndex];
@@ -1208,8 +1245,12 @@ void renderGrid(SDL_Renderer* pRenderer)
             assert((int)pCell->patternType >= 0);
             assert((int)pCell->patternType < PATTERN_MAX_VALUE);
 
-            // Only show empty cells if no cells are to be rendered
-            SDLRectArray* pRectArray = !g_GameState.renderCells ? 
+            const bool DrawEmptyCell =
+                !g_GameState.renderCells || isLineBeingCleared(y);
+
+            // Only show empty cells if no cells are to be rendered, or if
+            // the current line is being cleared
+            SDLRectArray* pRectArray = DrawEmptyCell ? 
                 &g_RectArrays.RectArrays[PATTERN_NONE] :
                 &g_RectArrays.RectArrays[pCell->patternType];
 
@@ -1233,51 +1274,6 @@ void renderGrid(SDL_Renderer* pRenderer)
             pArray->Rects,
             pArray->NumRects,
             NULL, NULL);
-    }
-
-
-    // Render flashing lines if we're clearing lines
-    if (isClearingLines() && g_GameState.renderCells)
-    {
-        const Uint64 sinceClearedLines = 
-            g_GameState.currentFrame - g_GameState.clearLinesFrame;
-        if ((sinceClearedLines % CLEAR_LINES_FLASH_DURATION) == 0)
-        {
-            g_GameState.toggleFlash = g_GameState.toggleFlash ? false : true;
-        }
-
-        if (g_GameState.toggleFlash)
-        {
-            SDL_Rect FlashRects[GRID_WIDTH * sizeof(g_GameState.clearLines)];
-            int rectIndex = 0;
-            int clearLineIndex = 0;
-            int y = g_GameState.clearLines[clearLineIndex];
-            while (y >= 0 && clearLineIndex < sizeof(g_GameState.clearLines))
-            {
-                for (int x = 0; x < GRID_WIDTH; ++x)
-                {
-                    GridCell* pCell = &g_Grid[y][x];
-                    SDL_Rect* pRect = &FlashRects[rectIndex];
-                    pRect->x = pCell->x * GRID_CELL_WIDTH + GridBaseX;
-                    pRect->y = pCell->y * GRID_CELL_HEIGHT + GridBaseY;
-                    pRect->w = GRID_CELL_WIDTH;
-                    pRect->h = GRID_CELL_HEIGHT;
-                    ++rectIndex;
-                }
-                clearLineIndex++;
-                y = g_GameState.clearLines[clearLineIndex];
-            }
-
-            Color white = { 255, 255, 255 };
-            SDL_SetRenderDrawColor(
-                pRenderer,
-                white.r,
-                white.g,
-                white.b,
-                SDL_ALPHA_OPAQUE);
-
-            SDL_RenderFillRects(pRenderer, FlashRects, rectIndex);
-        }
     }
 }
 
@@ -1323,7 +1319,8 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    ParticleSystemInitialize(&(g_GameState.DropParticles));
+    ParticleSystemInitialize(&(g_GameState.DropParticles), BEHAVIOR_DROP);
+    ParticleSystemInitialize(&(g_GameState.LineClearParticles), BEHAVIOR_LINE_CLEAR);
 
     srand(time(NULL));
 
