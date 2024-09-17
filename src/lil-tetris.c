@@ -53,9 +53,11 @@
 #define HOLD_PATTERN_Y 100
 #define HOLD_PATTERN_BORDER 5
 
-#define SPAWN_DELAY_FRAMES 45
-#define CLEAR_LINES_FRAMES 45
+#define SPAWN_DELAY_FRAMES 30
+#define CLEAR_LINES_FRAMES 30
 #define CLEAR_LINES_FLASH_DURATION 10
+
+#define LOCK_DELAY_FRAMES 60
 
 #define START_DROP_SPEED 2
 
@@ -96,6 +98,7 @@ typedef struct
     Uint64     lastDropFrame;
     Uint64     preSpawnFrame;
     Uint64     lastSpawnFrame;
+    Uint64     lockBeginFrame;
     Uint8      dropSpeed;
     Sint8      clearLines[GRID_HEIGHT];
     Uint64     clearLinesFrame;
@@ -220,6 +223,7 @@ void initializeGameState()
     g_GameState.lastDropFrame = 0;
     g_GameState.preSpawnFrame = 0;
     g_GameState.lastSpawnFrame = 0;
+    g_GameState.lockBeginFrame = 0;
     g_GameState.dropSpeed = START_DROP_SPEED; // Drops per second
     memset(g_GameState.clearLines, -1, sizeof(g_GameState.clearLines));
     g_GameState.clearLinesFrame = 0;
@@ -358,6 +362,8 @@ void commitCurrentPattern()
             }
         }
     }
+
+    g_GameState.lockBeginFrame = 0;
 }
 
 void beginSpawnNextPattern()
@@ -745,13 +751,40 @@ void updateGameState()
         {
             g_GameState.patternGridY++;
         }
-        else
+        else if (g_GameState.inputDownPressed)
         {
             commitCurrentPattern();
             beginSpawnNextPattern();
         }
+        else if (g_GameState.lockBeginFrame == 0)
+        {
+            // Start counting lock delay, which gets reset whenever we commit
+            // a pattern.
+            g_GameState.lockBeginFrame = g_GameState.currentFrame;
+        }
 
         g_GameState.lastDropFrame = g_GameState.currentFrame;
+    }
+
+    // Update lock delay if necessary
+    if (g_GameState.lockBeginFrame > 0)
+    {
+        // Reset lock delay if the current pattern isn't ready to lock
+        if (!patternCollides(getCurrentPattern(), 0, 1))
+        {
+            g_GameState.lockBeginFrame = 0;
+        }
+        else
+        {
+            const bool LockDelayExpired = 
+                g_GameState.lockBeginFrame > 0 &&
+                (g_GameState.currentFrame - g_GameState.lockBeginFrame) >= LOCK_DELAY_FRAMES;
+            if (LockDelayExpired)
+            {
+                commitCurrentPattern();
+                beginSpawnNextPattern();
+            }
+        }
     }
 
     // Check losing condition
