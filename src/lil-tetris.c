@@ -31,9 +31,12 @@
 #define STATS_LOC_X 445
 #define STATS_LOC_Y 300
 #define STATS_W 140
-#define STATS_H 65
+#define STATS_H 95
 #define STATS_TEXT_BORDERLEFT_X 5
 #define STATS_LEVEL_LOC_Y (STATS_LOC_Y + 30)
+#define STATS_BEST_LOC_Y (STATS_LEVEL_LOC_Y + 30)
+
+#define STATS_BEST_FILEPATH "/tmp/highscore"
 
 #define PAUSED_LOC_X 265
 #define PAUSED_LOC_Y 200
@@ -104,10 +107,12 @@ typedef struct
     Uint64     clearLinesFrame;
     Uint16     totalClearedLines;
     Uint8      currentLevel;
+    Uint8      currentBest;
     HTEXT      hNextText;
     HTEXT      hHoldText;
     HTEXT      hLinesText;
     HTEXT      hLevelText;
+    HTEXT      hBestText;
     HTEXT      hPausedText;
     HTEXT      hIntroText;
     bool       inputLeftPressed;
@@ -210,6 +215,34 @@ PatternType_t nextPatternTypeFromQueue()
     return nextType;
 }
 
+Uint8 readBestFromFilesystem() 
+{
+    FILE* pFile = fopen(STATS_BEST_FILEPATH, "r");
+    if (!pFile)
+    {
+        return 0;
+    }
+
+    Uint8 returnValue = fgetc(pFile);
+    if (returnValue == EOF)
+    {
+        return 0;
+    }
+
+    return returnValue;
+}
+
+bool writeBestToFilesystem()
+{
+    FILE* pFile = fopen(STATS_BEST_FILEPATH, "w");
+    if (!pFile)
+    {
+        return false;
+    }
+
+    return fputc(g_GameState.currentBest, pFile) == (int)g_GameState.currentBest;
+}
+
 void initializeGameState()
 {
     resetPatternQueue();
@@ -229,10 +262,12 @@ void initializeGameState()
     g_GameState.clearLinesFrame = 0;
     g_GameState.totalClearedLines = 0;
     g_GameState.currentLevel = 1;
+    g_GameState.currentBest = readBestFromFilesystem();
     g_GameState.hNextText = TEXT_INVALID_HANDLE;
     g_GameState.hHoldText = TEXT_INVALID_HANDLE;
     g_GameState.hLinesText = TEXT_INVALID_HANDLE;
     g_GameState.hLevelText = TEXT_INVALID_HANDLE;
+    g_GameState.hBestText = TEXT_INVALID_HANDLE;
     g_GameState.hPausedText = TEXT_INVALID_HANDLE;
     g_GameState.hIntroText = TEXT_INVALID_HANDLE;
     g_GameState.isPaused = false;
@@ -848,6 +883,12 @@ void updateGameState()
             g_GameState.dropSpeed = START_DROP_SPEED + g_GameState.currentLevel;
             g_GameState.clearLinesFrame = g_GameState.currentFrame;
 
+            if (g_GameState.totalClearedLines > g_GameState.currentBest)
+            {
+                g_GameState.currentBest = g_GameState.totalClearedLines;
+                writeBestToFilesystem();
+            }
+
             if (g_GameState.currentLevel > previousLevel)
             {
                 // Level up!
@@ -1266,6 +1307,23 @@ void renderStats(SDL_Renderer* pRenderer)
     if (!TextDrawEntry(g_GameState.hLevelText, pRenderer, levelTextX, levelTextY))
     {
         fprintf(stderr, "Failed to draw level text\n");
+    }
+
+    // Best text
+    if (g_GameState.hBestText == TEXT_INVALID_HANDLE)
+    {
+        g_GameState.hBestText = TextCreateEntry();
+        assert(g_GameState.hBestText != TEXT_INVALID_HANDLE);
+    }
+
+    const int bestTextX = linesTextX;
+    const int bestTextY = STATS_BEST_LOC_Y;
+    char bestText[256];
+    sprintf(bestText, "BEST: %hhu", g_GameState.currentBest);
+    TextSetEntryData(g_GameState.hBestText, pRenderer, bestText);
+    if (!TextDrawEntry(g_GameState.hBestText, pRenderer, bestTextX, bestTextY))
+    {
+        fprintf(stderr, "Failed to draw best text\n");
     }
 }
 
