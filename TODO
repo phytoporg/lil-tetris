@@ -1,9 +1,5 @@
-- More leniency before pieces are committed when they collide (not sure how yet)
--- it's hard to survive at high levels, gotta study other tetris implementations
-
-- Improve RNG
-- Add a real game over flow
-- Input hints on intro screen
+- get rid of themes altogether
+- create a real game over sequence
 
 POLISH
 - Committing pieces
@@ -19,6 +15,5 @@ POLISH
 -- Something more interesting than flashing presentation
 --- More particles !!
 
-- improve theme palettes
 - some kind of stage bg
 -- Thematically-appropriate particles systems?
