@@ -81,6 +81,7 @@ typedef struct
 
 typedef struct
 {
+    PatternType_t patternQueue[PATTERN_MAX_VALUE - 1];
     PatternType_t nextPatternType;
     PatternType_t currentPatternType;
     PatternType_t holdPatternType;
@@ -90,6 +91,7 @@ typedef struct
     Sint8      patternGridX;
     Sint8      patternGridY;
     Uint8      currentPatternRotation;
+    Uint8      patternQueueIndex;
     Uint64     currentFrame;
     Uint64     lastDropFrame;
     Uint64     preSpawnFrame;
@@ -135,11 +137,6 @@ static Pattern** g_PatternLUT[(int)PATTERN_MAX_VALUE] = {
     SquarePatternRotations,
 };
 
-PatternType_t randomPatternType()
-{
-    return (PatternType_t)(rand() % (int)(PATTERN_MAX_VALUE - 1) + 1);
-}
-
 void getSpawnPosition(PatternType_t patternType, Sint8* pXOut, Sint8* pYOut)
 {
     Pattern* pPattern = g_PatternLUT[patternType][0];
@@ -160,10 +157,62 @@ void resetInputStates()
     g_GameState.inputBeginGame = false;
 }
 
+void resetPatternQueue()
+{
+    // Initialize
+    const Uint8 Begin = (Uint8)(PATTERN_NONE + 1);
+    const Uint8 End = (Uint8)PATTERN_MAX_VALUE;
+    for (Uint8 i = Begin; i < End; ++i)
+    {
+        g_GameState.patternQueue[i - 1] = i;
+    }
+
+    // Shuffle
+    const Uint8 NumElements =
+        sizeof(g_GameState.patternQueue) /
+        sizeof(g_GameState.patternQueue[0]);
+    for (Uint8 i = Begin; i < End; ++i)
+    {
+        const Uint8 a = rand() % NumElements;
+        Uint8 b = rand() % NumElements;
+
+        // No noops allowed
+        while (b == a)
+        {
+            b = rand() % NumElements;
+        }
+
+        // Swap a & b
+        const Uint8 temp = g_GameState.patternQueue[a];
+        g_GameState.patternQueue[a] = g_GameState.patternQueue[b];
+        g_GameState.patternQueue[b] = temp;
+    }
+
+    g_GameState.patternQueueIndex = 0;
+}
+
+PatternType_t nextPatternTypeFromQueue()
+{
+    const Uint8 NumElements =
+        sizeof(g_GameState.patternQueue) /
+        sizeof(g_GameState.patternQueue[0]);
+    if (g_GameState.patternQueueIndex >= NumElements)
+    {
+        resetPatternQueue();
+    }
+
+    PatternType_t nextType = g_GameState.patternQueue[g_GameState.patternQueueIndex];
+    g_GameState.patternQueueIndex++;
+
+    return nextType;
+}
+
 void initializeGameState()
 {
-    g_GameState.nextPatternType = randomPatternType();
-    g_GameState.currentPatternType = randomPatternType();
+    resetPatternQueue();
+
+    g_GameState.nextPatternType = nextPatternTypeFromQueue();
+    g_GameState.currentPatternType = nextPatternTypeFromQueue();
     g_GameState.holdPatternType = PATTERN_NONE;
 	g_GameState.pCurrentTheme = g_DefaultThemes;
     g_GameState.currentPatternRotation = 0;
@@ -319,7 +368,7 @@ void beginSpawnNextPattern()
 void spawnNextPattern()
 {
     g_GameState.currentPatternType = g_GameState.nextPatternType;
-    g_GameState.nextPatternType = randomPatternType();
+    g_GameState.nextPatternType = nextPatternTypeFromQueue();
     g_GameState.currentPatternRotation = 0;
     getSpawnPosition(
         g_GameState.currentPatternType,
@@ -441,7 +490,7 @@ void checkInputs()
         {
             g_GameState.holdPatternType = g_GameState.currentPatternType;
             g_GameState.currentPatternType = g_GameState.nextPatternType; 
-            g_GameState.nextPatternType = randomPatternType();
+            g_GameState.nextPatternType = nextPatternTypeFromQueue();
         }
         else
         {
@@ -723,8 +772,8 @@ void updateGameState()
         g_GameState.pCurrentTheme = g_DefaultThemes;
         g_GameState.dropSpeed = START_DROP_SPEED;
         g_GameState.holdPatternType = PATTERN_NONE;
-        g_GameState.currentPatternType = randomPatternType();
-        g_GameState.nextPatternType = randomPatternType();
+        g_GameState.currentPatternType = nextPatternTypeFromQueue();
+        g_GameState.nextPatternType = nextPatternTypeFromQueue();
 
         // TODO: do this elsewhere?
         g_GameState.isGameOver = false;

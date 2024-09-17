@@ -1,6 +1,6 @@
 typedef enum
 {
-    PATTERN_NONE,
+    PATTERN_NONE = 0,
     PATTERN_L_L,
     PATTERN_L_R,
     PATTERN_Z_L,
