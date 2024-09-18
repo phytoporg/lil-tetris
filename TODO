@@ -1,5 +1,5 @@
+- add mute input
 - can't spin pieces against flat lines (?)
-- fix last-line-clear bug
 - get rid of themes altogether
 - create a real game over sequence
 
