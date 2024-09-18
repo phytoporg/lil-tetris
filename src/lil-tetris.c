@@ -28,8 +28,8 @@
 #define GRID_DISPLACE_AMOUNT 3
 #define GRID_DISPLACE_DURATION 3
 
-#define STATS_LOC_X 445
-#define STATS_LOC_Y 300
+#define STATS_LOC_X 30
+#define STATS_LOC_Y 356
 #define STATS_W 140
 #define STATS_H 95
 #define STATS_TEXT_BORDERLEFT_X 5
@@ -45,24 +45,26 @@
 #define INTRO_LOC_Y 210
 
 #define NEXT_PATTERN_TEXT_X 450
-#define NEXT_PATTERN_TEXT_Y 80
+#define NEXT_PATTERN_TEXT_Y 30
 #define NEXT_PATTERN_X 450
-#define NEXT_PATTERN_Y 100
+#define NEXT_PATTERN_Y 50
 #define NEXT_PATTERN_BORDER 5
 
 #define HOLD_PATTERN_TEXT_X 60
-#define HOLD_PATTERN_TEXT_Y 80
+#define HOLD_PATTERN_TEXT_Y 30
 #define HOLD_PATTERN_X 60
-#define HOLD_PATTERN_Y 100
+#define HOLD_PATTERN_Y 50
 #define HOLD_PATTERN_BORDER 5
 
-#define SPAWN_DELAY_FRAMES 30
-#define CLEAR_LINES_FRAMES 30
+#define SPAWN_DELAY_FRAMES 15
+#define CLEAR_LINES_FRAMES 15
 #define CLEAR_LINES_FLASH_DURATION 10
 
 #define LOCK_DELAY_FRAMES 60
 
 #define START_DROP_SPEED 2
+
+#define NEXT_QUEUE_SIZE 4
 
 // Types
 typedef struct
@@ -86,8 +88,8 @@ typedef struct
 
 typedef struct
 {
-    PatternType_t patternQueue[PATTERN_MAX_VALUE - 1];
-    PatternType_t nextPatternType;
+    PatternType_t randomBag[PATTERN_MAX_VALUE - 1];
+    PatternType_t nextQueue[NEXT_QUEUE_SIZE];
     PatternType_t currentPatternType;
     PatternType_t holdPatternType;
 	PatternTheme* pCurrentTheme;
@@ -96,7 +98,8 @@ typedef struct
     Sint8      patternGridX;
     Sint8      patternGridY;
     Uint8      currentPatternRotation;
-    Uint8      patternQueueIndex;
+    Uint8      randomBagIndex;
+    Uint8      nextQueueIndex;
     Uint64     currentFrame;
     Uint64     lastDropFrame;
     Uint64     preSpawnFrame;
@@ -165,20 +168,20 @@ void resetInputStates()
     g_GameState.inputBeginGame = false;
 }
 
-void resetPatternQueue()
+void resetRandomBag()
 {
     // Initialize
     const Uint8 Begin = (Uint8)(PATTERN_NONE + 1);
     const Uint8 End = (Uint8)PATTERN_MAX_VALUE;
     for (Uint8 i = Begin; i < End; ++i)
     {
-        g_GameState.patternQueue[i - 1] = i;
+        g_GameState.randomBag[i - 1] = i;
     }
 
     // Shuffle
     const Uint8 NumElements =
-        sizeof(g_GameState.patternQueue) /
-        sizeof(g_GameState.patternQueue[0]);
+        sizeof(g_GameState.randomBag) /
+        sizeof(g_GameState.randomBag[0]);
     for (Uint8 i = Begin; i < End; ++i)
     {
         const Uint8 a = rand() % NumElements;
@@ -191,28 +194,56 @@ void resetPatternQueue()
         }
 
         // Swap a & b
-        const Uint8 temp = g_GameState.patternQueue[a];
-        g_GameState.patternQueue[a] = g_GameState.patternQueue[b];
-        g_GameState.patternQueue[b] = temp;
+        const Uint8 temp = g_GameState.randomBag[a];
+        g_GameState.randomBag[a] = g_GameState.randomBag[b];
+        g_GameState.randomBag[b] = temp;
     }
 
-    g_GameState.patternQueueIndex = 0;
+    g_GameState.randomBagIndex = 0;
 }
 
-PatternType_t nextPatternTypeFromQueue()
+PatternType_t nextPatternTypeFromRandomBag()
 {
     const Uint8 NumElements =
-        sizeof(g_GameState.patternQueue) /
-        sizeof(g_GameState.patternQueue[0]);
-    if (g_GameState.patternQueueIndex >= NumElements)
+        sizeof(g_GameState.randomBag) /
+        sizeof(g_GameState.randomBag[0]);
+    if (g_GameState.randomBagIndex >= NumElements)
     {
-        resetPatternQueue();
+        resetRandomBag();
     }
 
-    PatternType_t nextType = g_GameState.patternQueue[g_GameState.patternQueueIndex];
-    g_GameState.patternQueueIndex++;
+    PatternType_t nextType = g_GameState.randomBag[g_GameState.randomBagIndex];
+    g_GameState.randomBagIndex++;
 
     return nextType;
+}
+
+void initializeNextQueue()
+{
+    resetRandomBag();
+    for (Uint8 i = 0; i < NEXT_QUEUE_SIZE; ++i)
+    {
+        g_GameState.nextQueue[i] = nextPatternTypeFromRandomBag();
+    }
+
+    g_GameState.nextQueueIndex = 0;
+}
+
+PatternType_t popFromNextQueue()
+{
+    PatternType_t returnValue = g_GameState.nextQueue[g_GameState.nextQueueIndex];
+    g_GameState.nextQueueIndex = (g_GameState.nextQueueIndex + 1) % NEXT_QUEUE_SIZE;
+
+    // Tail always sits NEXT_QUEUE_SIZE - 1 slots ahead
+    Uint8 nextQueueTail = (g_GameState.nextQueueIndex + (NEXT_QUEUE_SIZE - 1)) % NEXT_QUEUE_SIZE;
+
+    g_GameState.nextQueue[nextQueueTail] = nextPatternTypeFromRandomBag();
+    return returnValue;
+}
+
+PatternType_t topFromNextQueue()
+{
+    return g_GameState.nextQueue[g_GameState.nextQueueIndex];
 }
 
 Uint8 readBestFromFilesystem() 
@@ -223,7 +254,7 @@ Uint8 readBestFromFilesystem()
         return 0;
     }
 
-    Uint8 returnValue = fgetc(pFile);
+    Sint8 returnValue = fgetc(pFile);
     if (returnValue == EOF)
     {
         return 0;
@@ -245,10 +276,9 @@ bool writeBestToFilesystem()
 
 void initializeGameState()
 {
-    resetPatternQueue();
+    initializeNextQueue();
 
-    g_GameState.nextPatternType = nextPatternTypeFromQueue();
-    g_GameState.currentPatternType = nextPatternTypeFromQueue();
+    g_GameState.currentPatternType = popFromNextQueue();
     g_GameState.holdPatternType = PATTERN_NONE;
 	g_GameState.pCurrentTheme = g_DefaultThemes;
     g_GameState.currentPatternRotation = 0;
@@ -408,8 +438,7 @@ void beginSpawnNextPattern()
 
 void spawnNextPattern()
 {
-    g_GameState.currentPatternType = g_GameState.nextPatternType;
-    g_GameState.nextPatternType = nextPatternTypeFromQueue();
+    g_GameState.currentPatternType = popFromNextQueue();
     g_GameState.currentPatternRotation = 0;
     getSpawnPosition(
         g_GameState.currentPatternType,
@@ -530,8 +559,7 @@ void checkInputs()
         if (g_GameState.holdPatternType == PATTERN_NONE)
         {
             g_GameState.holdPatternType = g_GameState.currentPatternType;
-            g_GameState.currentPatternType = g_GameState.nextPatternType; 
-            g_GameState.nextPatternType = nextPatternTypeFromQueue();
+            g_GameState.currentPatternType = popFromNextQueue();
         }
         else
         {
@@ -840,8 +868,8 @@ void updateGameState()
         g_GameState.pCurrentTheme = g_DefaultThemes;
         g_GameState.dropSpeed = START_DROP_SPEED;
         g_GameState.holdPatternType = PATTERN_NONE;
-        g_GameState.currentPatternType = nextPatternTypeFromQueue();
-        g_GameState.nextPatternType = nextPatternTypeFromQueue();
+        g_GameState.currentPatternType = popFromNextQueue();
+        initializeNextQueue();
 
         // TODO: do this elsewhere?
         g_GameState.isGameOver = false;
@@ -1108,18 +1136,50 @@ void renderCurrentPattern(SDL_Renderer* pRenderer)
         pOuterColor);
 }
 
-void renderNextPattern(SDL_Renderer* pRenderer)
+void renderNextPattern(SDL_Renderer* pRenderer, PatternType_t patternType, int baseX, int baseY)
 {
-    PatternType_t patternType = g_GameState.nextPatternType;
-    Pattern* pPattern = g_PatternLUT[g_GameState.nextPatternType][0];
+    Pattern* pPattern = g_PatternLUT[patternType][0];
 
+    // Now draw the pattern
+    int offsetX = ((4 - pPattern->cols) * GRID_CELL_WIDTH) / 2;
+    int offsetY = ((4 - pPattern->rows) * GRID_CELL_HEIGHT) / 2;
+    
+    int toDrawIndex = 0;
+    SDL_Rect toDraw[4];
+    for (int y = 0; y < pPattern->rows; ++y) {
+        for (int x = 0; x < pPattern->cols; ++x) {
+            if (pPattern->occupancy[y][x])
+            {
+                SDL_Rect* pRect = &toDraw[toDrawIndex];
+                pRect->x = x * GRID_CELL_WIDTH + baseX + offsetX;
+                pRect->y = y * GRID_CELL_HEIGHT + baseY + offsetY;
+                pRect->w = GRID_CELL_WIDTH;
+                pRect->h = GRID_CELL_HEIGHT;
+
+                ++toDrawIndex;
+            }
+        }
+    }
+
+    assert(toDrawIndex == 4);
+    renderCellArray(
+        pRenderer,
+        patternType,
+        toDraw,
+        toDrawIndex, 
+        NULL, NULL);
+}
+
+void renderNextPatterns(SDL_Renderer* pRenderer)
+{
     // Draw the bg first
+    const int PatternBlockHeight = NEXT_PATTERN_BORDER * 2 + 4 * GRID_CELL_HEIGHT;
     Color black = { 0, 0, 0 };
     SDL_Rect previewBgRect;
     previewBgRect.x = NEXT_PATTERN_X - NEXT_PATTERN_BORDER;
     previewBgRect.y = NEXT_PATTERN_Y - NEXT_PATTERN_BORDER;
     previewBgRect.w = NEXT_PATTERN_BORDER * 2 + 4 * GRID_CELL_WIDTH;
-    previewBgRect.h = NEXT_PATTERN_BORDER * 2 + 4 * GRID_CELL_HEIGHT;
+    previewBgRect.h = PatternBlockHeight * NEXT_QUEUE_SIZE;
 
     SDL_SetRenderDrawColor(
         pRenderer,
@@ -1151,34 +1211,15 @@ void renderNextPattern(SDL_Renderer* pRenderer)
         return;
     }
 
-    // Now draw the pattern
-    int offsetX = ((4 - pPattern->cols) * GRID_CELL_WIDTH) / 2;
-    int offsetY = ((4 - pPattern->rows) * GRID_CELL_HEIGHT) / 2;
-    
-    int toDrawIndex = 0;
-    SDL_Rect toDraw[4];
-    for (int y = 0; y < pPattern->rows; ++y) {
-        for (int x = 0; x < pPattern->cols; ++x) {
-            if (pPattern->occupancy[y][x])
-            {
-                SDL_Rect* pRect = &toDraw[toDrawIndex];
-                pRect->x = x * GRID_CELL_WIDTH + NEXT_PATTERN_X + offsetX;
-                pRect->y = y * GRID_CELL_HEIGHT + NEXT_PATTERN_Y + offsetY;
-                pRect->w = GRID_CELL_WIDTH;
-                pRect->h = GRID_CELL_HEIGHT;
+    // Now draw the patterns
+    for (Sint8 i = 0; i < NEXT_QUEUE_SIZE; ++i)
+    {
+        const int NextQueueIndex = (g_GameState.nextQueueIndex + i) % NEXT_QUEUE_SIZE;
+        const PatternType_t NextPatternType = g_GameState.nextQueue[NextQueueIndex];
+        const int Y = NEXT_PATTERN_Y + PatternBlockHeight * i;
 
-                ++toDrawIndex;
-            }
-        }
+        renderNextPattern(pRenderer, NextPatternType, NEXT_PATTERN_X, Y);
     }
-
-    assert(toDrawIndex == 4);
-    renderCellArray(
-        pRenderer,
-        g_GameState.nextPatternType,
-        toDraw,
-        toDrawIndex, 
-        NULL, NULL);
 }
 
 void renderHoldPattern(SDL_Renderer* pRenderer)
@@ -1256,9 +1297,6 @@ void renderHoldPattern(SDL_Renderer* pRenderer)
 
 void renderStats(SDL_Renderer* pRenderer)
 {
-    PatternType_t patternType = g_GameState.nextPatternType;
-    Pattern* pPattern = g_PatternLUT[g_GameState.nextPatternType][0];
-
     // Draw the bg first
     Color black = { 0, 0, 0 };
     SDL_Rect statsBgRect;
@@ -1565,7 +1603,7 @@ int main(int argc, char** argv)
         renderGrid(pRender);
         renderShadowPattern(pRender);
         renderCurrentPattern(pRender);
-        renderNextPattern(pRender);
+        renderNextPatterns(pRender);
         renderHoldPattern(pRender);
         renderStats(pRender);
         renderPauseText(pRender);
