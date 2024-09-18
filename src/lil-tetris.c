@@ -261,7 +261,8 @@ Uint8 readBestFromFilesystem()
         return 0;
     }
 
-    return returnValue;
+    fclose(pFile);
+    return (Uint8)returnValue;
 }
 
 bool writeBestToFilesystem()
@@ -272,7 +273,10 @@ bool writeBestToFilesystem()
         return false;
     }
 
-    return fputc(g_GameState.currentBest, pFile) == (int)g_GameState.currentBest;
+    const bool Success = fputc(g_GameState.currentBest, pFile) == (int)g_GameState.currentBest;
+
+    fclose(pFile);
+    return Success;
 }
 
 void initializeGameState()
@@ -674,8 +678,8 @@ void updateGameState()
             g_GameState.clearLinesFrame;
         if (sinceClearedLines >= CLEAR_LINES_FRAMES)
         {
-            // Nuke out the cleared lines
-            for (int i = 0; i < sizeof(g_GameState.clearLines); ++i)
+            // Collapse cleared lines
+            for (Sint8 i = 0; i < sizeof(g_GameState.clearLines); ++i)
             {
                 Sint8 y = g_GameState.clearLines[i];
                 if (y < 0)
@@ -683,59 +687,13 @@ void updateGameState()
                     break;
                 }
 
-                for (int x = 0; x < GRID_WIDTH; ++x)
+                for (Sint8 j = (y - 1); j >= 0; --j)
                 {
-                    g_Grid[y][x].patternType = PATTERN_NONE;
-                }
-            }
-
-            // Collapse the cleared lines
-            Sint8 lastNonClearY = -1;
-            Sint8 lastClearY = -1;
-            for (int y = 0; y < GRID_HEIGHT; ++y)
-            {
-                // Is the current line clear?
-                bool isClear = true;
-                for (int x = 0; x < GRID_WIDTH; ++x)
-                {
-                    if (g_Grid[y][x].patternType != PATTERN_NONE)
+                    // Copy each line "down" one
+                    for (int x = 0; x < GRID_WIDTH; ++x)
                     {
-                        isClear = false;
-                        break;
+                        g_Grid[j + 1][x].patternType = g_Grid[j][x].patternType;
                     }
-                }
-
-                if (!isClear || y == (GRID_HEIGHT - 1))
-                {
-                    if (y == (GRID_HEIGHT - 1))
-                    {
-                        // Treat the last line as the last clear Y
-                        lastClearY = y;
-                    }
-
-                    // If this line isn't clear, and the previous line is, we may have
-                    // non-clear lines to copy across a gap of clear lines
-                    if (lastClearY == y - 1 && lastNonClearY >= 0 || y == (GRID_HEIGHT - 1))
-                    {
-                        Sint8 src = lastNonClearY;
-                        Sint8 dst = lastClearY;
-
-                        while(src >= 0) 
-                        {
-                            // Copy src line to dst line
-                            for (int x = 0; x < GRID_WIDTH; ++x)
-                            {
-                                g_Grid[dst][x].patternType = g_Grid[src][x].patternType;
-                            }
-                            --src;
-                            --dst;
-                        }
-                    }
-                    lastNonClearY = y;
-                }
-                else
-                {
-                    lastClearY = y;
                 }
             }
 
