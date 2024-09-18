@@ -131,6 +131,7 @@ typedef struct
     bool       isIntro;
     bool       isGameOver;
     bool       renderCells;
+    bool       hasDoneHold;
 } GameState;
 
 // Globals
@@ -304,6 +305,7 @@ void initializeGameState()
     g_GameState.isIntro = true;
     g_GameState.isGameOver = false;
     g_GameState.renderCells = true;
+    g_GameState.hasDoneHold = false;
 
     getSpawnPosition(
         g_GameState.currentPatternType,
@@ -429,6 +431,7 @@ void commitCurrentPattern()
     }
 
     g_GameState.lockBeginFrame = 0;
+    g_GameState.hasDoneHold = false;
 }
 
 void beginSpawnNextPattern()
@@ -554,7 +557,7 @@ void checkInputs()
         }
     }
 
-    if (g_GameState.inputHoldPiece)
+    if (g_GameState.inputHoldPiece && !g_GameState.hasDoneHold)
     {
         if (g_GameState.holdPatternType == PATTERN_NONE)
         {
@@ -573,6 +576,7 @@ void checkInputs()
             g_GameState.currentPatternType,
             &(g_GameState.patternGridX),
             &(g_GameState.patternGridY));
+        g_GameState.hasDoneHold = true;
     }
 }
 
