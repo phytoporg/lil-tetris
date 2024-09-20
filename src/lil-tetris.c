@@ -10,12 +10,16 @@
 #include "lil-tetris-themes.c"
 #include "lil-tetris-text.c"
 #include "lil-tetris-particles.c"
+#include "lil-tetris-input.c"
 
 // Constants
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
 
 #define FPS 60.0f
+
+#define INPUT_REPEAT_DELAY_MS 30
+#define INPUT_REPEAT_INTERVAL_MS 16
 
 #define GRID_HEIGHT 20
 #define GRID_WIDTH 10
