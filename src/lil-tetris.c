@@ -136,6 +136,7 @@ typedef struct
     bool       isGameOver;
     bool       renderCells;
     bool       hasDoneHold;
+    InputContext InputContext;
 } GameState;
 
 // Globals
@@ -321,6 +322,7 @@ void initializeGameState()
         &(g_GameState.patternGridY));
 
     resetInputStates();
+    InputInitializeContext(&(g_GameState.InputContext));
 }
 
 Pattern* getCurrentPattern()
