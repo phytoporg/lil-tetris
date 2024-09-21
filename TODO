@@ -1,22 +1,16 @@
 - implement custom key repeat
-- add mute input
-- can't spin pieces against flat lines (?)
-- get rid of themes altogether
 - create a real game over sequence
+
+- can't spin pieces against flat lines (?)
+- add mute input
+- get rid of themes altogether
 
 POLISH
 - Committing pieces
--- Add some particles to accompany the flash
 -- Add commit sfx
+
+- Some kind of stage bg, get rid of the drab gray
+-- Thematically-appropriate particles systems?
 
 - Level up
 -- Animated "level up!" text
--- Fade/interpolate between themes?
-
-- Line clear
--- Animated block drop rather than teleporting into place
--- Something more interesting than flashing presentation
---- More particles !!
-
-- some kind of stage bg
--- Thematically-appropriate particles systems?
