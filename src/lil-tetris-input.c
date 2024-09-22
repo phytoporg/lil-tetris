@@ -51,22 +51,6 @@ bool InputHasScancodes(InputMapEntry* pEntry, const Uint8* pKeyboardState)
     return false;
 }
 
-#define UPDATE_KEYSTATE(pContext, inputEvent,  pKeys)                                                   \
-    {                                                                                                   \
-        InputMapEntry* pEntry = &pContext->InputMap[inputEvent];                                        \
-        pContext->KeyStatePreviousFrame[inputEvent] = pContext->KeyStateCurrentFrame[inputEvent];       \
-        pContext->KeyStateCurrentFrame[inputEvent] = InputHasScancodes(pEntry, pKeys);                  \
-                                                                                                        \
-        if (pContext->KeyStatePreviousFrame[inputEvent] == pContext->KeyStateCurrentFrame[inputEvent])  \
-        {                                                                                               \
-            pContext->KeyStateDurationFrames[inputEvent]++;                                             \
-        }                                                                                               \
-        else                                                                                            \
-        {                                                                                               \
-            pContext->KeyStateDurationFrames[inputEvent] = 0;                                           \
-        }                                                                                               \
-    }
-
 void InputInitializeContext(InputContext* pContext)
 {
     memset(pContext->KeyStateCurrentFrame, 0, sizeof(pContext->KeyStateCurrentFrame));
@@ -121,6 +105,22 @@ bool InputHasEventPressed(InputContext* pContext, InputEvent event)
 
     return HasThisFrame && !HadLastFrame;
 }
+
+#define UPDATE_KEYSTATE(pContext, inputEvent,  pKeys)                                                   \
+    {                                                                                                   \
+        InputMapEntry* pEntry = &pContext->InputMap[inputEvent];                                        \
+        pContext->KeyStatePreviousFrame[inputEvent] = pContext->KeyStateCurrentFrame[inputEvent];       \
+        pContext->KeyStateCurrentFrame[inputEvent] = InputHasScancodes(pEntry, pKeys);                  \
+                                                                                                        \
+        if (pContext->KeyStatePreviousFrame[inputEvent] == pContext->KeyStateCurrentFrame[inputEvent])  \
+        {                                                                                               \
+            pContext->KeyStateDurationFrames[inputEvent]++;                                             \
+        }                                                                                               \
+        else                                                                                            \
+        {                                                                                               \
+            pContext->KeyStateDurationFrames[inputEvent] = 0;                                           \
+        }                                                                                               \
+    }
 
 // Must be called after pumping SDL event loop
 void InputUpdateContext(InputContext* pContext)

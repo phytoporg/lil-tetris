@@ -1,3 +1,5 @@
+#include <SDL2/SDL.h>
+
 typedef enum
 {
     PATTERN_NONE = 0,
@@ -33,26 +35,11 @@ static Pattern* EmptyPatternRotations[1] = {
     &EmptyPattern
 };
 
+// Pattern orientations and wall kick data sourced from the Super Rotation System
+// documented at harddrop.com/wiki/SRS
+
 // L-Patterns
 static Pattern LPatternLeft = {
-    { { 1, 1, 1, 0},
-      { 1, 0, 0, 0},
-      { 0, 0, 0, 0},
-      { 0, 0, 0, 0} },
-    2,
-    3,
-};
-
-static Pattern LPatternLeft_Rot90 = {
-    { { 1, 1, 0, 0},
-      { 0, 1, 0, 0},
-      { 0, 1, 0, 0},
-      { 0, 0, 0, 0} },
-    3,
-    2,
-};
-
-static Pattern LPatternLeft_Rot180 = {
     { { 0, 0, 1, 0},
       { 1, 1, 1, 0},
       { 0, 0, 0, 0},
@@ -61,10 +48,28 @@ static Pattern LPatternLeft_Rot180 = {
     3,
 };
 
-static Pattern LPatternLeft_Rot270 = {
-    { { 1, 0, 0, 0},
+static Pattern LPatternLeft_Rot90 = {
+    { { 0, 1, 0, 0},
+      { 0, 1, 0, 0},
+      { 0, 1, 1, 0},
+      { 0, 0, 0, 0} },
+    3,
+    2,
+};
+
+static Pattern LPatternLeft_Rot180 = {
+    { { 0, 0, 0, 0},
+      { 1, 1, 1, 0},
       { 1, 0, 0, 0},
-      { 1, 1, 0, 0},
+      { 0, 0, 0, 0} },
+    2,
+    3,
+};
+
+static Pattern LPatternLeft_Rot270 = {
+    { { 1, 1, 0, 0},
+      { 0, 1, 0, 0},
+      { 0, 1, 0, 0},
       { 0, 0, 0, 0} },
     3,
     2,
@@ -78,24 +83,6 @@ static Pattern* LPatternLeftRotations[4] = {
 };
 
 static Pattern LPatternRight = {
-    { { 1, 1, 1, 0},
-      { 0, 0, 1, 0},
-      { 0, 0, 0, 0},
-      { 0, 0, 0, 0} },
-    2,
-    3,
-};
-
-static Pattern LPatternRight_Rot90 = {
-    { { 0, 1, 0, 0},
-      { 0, 1, 0, 0},
-      { 1, 1, 0, 0},
-      { 0, 0, 0, 0} },
-    3,
-    2,
-};
-
-static Pattern LPatternRight_Rot180 = {
     { { 1, 0, 0, 0},
       { 1, 1, 1, 0},
       { 0, 0, 0, 0},
@@ -104,10 +91,28 @@ static Pattern LPatternRight_Rot180 = {
     3,
 };
 
+static Pattern LPatternRight_Rot90 = {
+    { { 0, 1, 1, 0},
+      { 0, 1, 0, 0},
+      { 0, 1, 0, 0},
+      { 0, 0, 0, 0} },
+    3,
+    2,
+};
+
+static Pattern LPatternRight_Rot180 = {
+    { { 0, 0, 0, 0},
+      { 1, 1, 1, 0},
+      { 0, 0, 1, 0},
+      { 0, 0, 0, 0} },
+    3,
+    3,
+};
+
 static Pattern LPatternRight_Rot270 = {
-    { { 1, 1, 0, 0},
-      { 1, 0, 0, 0},
-      { 1, 0, 0, 0},
+    { { 0, 1, 0, 0},
+      { 0, 1, 0, 0},
+      { 1, 1, 0, 0},
       { 0, 0, 0, 0} },
     3,
     2,
@@ -130,6 +135,24 @@ static Pattern ZPatternLeft = {
 };
 
 static Pattern ZPatternLeft_Rot90 = {
+    { { 0, 0, 1, 0},
+      { 0, 1, 1, 0},
+      { 0, 1, 0, 0},
+      { 0, 0, 0, 0} },
+    3,
+    2,
+};
+
+static Pattern ZPatternLeft_Rot180 = {
+    { { 0, 0, 0, 0},
+      { 1, 1, 0, 0},
+      { 0, 1, 1, 0},
+      { 0, 0, 0, 0} },
+    2,
+    3,
+};
+
+static Pattern ZPatternLeft_Rot270 = {
     { { 0, 1, 0, 0},
       { 1, 1, 0, 0},
       { 1, 0, 0, 0},
@@ -137,9 +160,12 @@ static Pattern ZPatternLeft_Rot90 = {
     3,
     2,
 };
-static Pattern* ZPatternLeftRotations[2] = {
+
+static Pattern* ZPatternLeftRotations[4] = {
     &ZPatternLeft,
-    &ZPatternLeft_Rot90
+    &ZPatternLeft_Rot90,
+    &ZPatternLeft_Rot180,
+    &ZPatternLeft_Rot270
 };
 
 static Pattern ZPatternRight = {
@@ -152,6 +178,24 @@ static Pattern ZPatternRight = {
 };
 
 static Pattern ZPatternRight_Rot90 = {
+    { { 0, 1, 0, 0},
+      { 0, 1, 1, 0},
+      { 0, 0, 1, 0},
+      { 0, 0, 0, 0} },
+    3,
+    2,
+};
+
+static Pattern ZPatternRight_Rot180 = {
+    { { 0, 0, 0, 0},
+      { 0, 1, 1, 0},
+      { 1, 1, 0, 0},
+      { 0, 0, 0, 0} },
+    2,
+    3,
+};
+
+static Pattern ZPatternRight_Rot270 = {
     { { 1, 0, 0, 0},
       { 1, 1, 0, 0},
       { 0, 1, 0, 0},
@@ -159,9 +203,12 @@ static Pattern ZPatternRight_Rot90 = {
     3,
     2,
 };
-static Pattern* ZPatternRightRotations[2] = {
+
+static Pattern* ZPatternRightRotations[4] = {
     &ZPatternRight,
     &ZPatternRight_Rot90,
+    &ZPatternRight_Rot180,
+    &ZPatternRight_Rot270,
 };
 
 static Pattern TPattern = {
@@ -217,16 +264,37 @@ static Pattern LinePattern = {
 };
 
 static Pattern LinePattern_Rot90 = {
-    { { 1, 0, 0, 0},
-      { 1, 0, 0, 0},
-      { 1, 0, 0, 0},
-      { 1, 0, 0, 0} },
+    { { 0, 0, 1, 0},
+      { 0, 0, 1, 0},
+      { 0, 0, 1, 0},
+      { 0, 0, 1, 0} },
     4,
     1,
 };
-static Pattern* LinePatternRotations[2] = {
+
+static Pattern LinePattern_Rot180 = {
+    { { 0, 0, 0, 0},
+      { 0, 0, 0, 0},
+      { 1, 1, 1, 1},
+      { 0, 0, 0, 0} },
+    1,
+    4,
+};
+
+static Pattern LinePattern_Rot270 = {
+    { { 0, 1, 0, 0},
+      { 0, 1, 0, 0},
+      { 0, 1, 0, 0},
+      { 0, 1, 0, 0} },
+    1,
+    4,
+};
+
+static Pattern* LinePatternRotations[4] = {
     &LinePattern,
     &LinePattern_Rot90,
+    &LinePattern_Rot180,
+    &LinePattern_Rot270,
 };
 
 static Pattern SquarePattern = {
@@ -250,4 +318,53 @@ static int PatternNumRotations[(int)PATTERN_MAX_VALUE] = {
     PATTERN_ROTATION_COUNT(TPatternRotations),      // PATTERN_T_SHAPE,
     PATTERN_ROTATION_COUNT(LinePatternRotations),   // PATTERN_LINE_SHAPE,
     PATTERN_ROTATION_COUNT(SquarePatternRotations), // PATTERN_SQUARE_SHAPE,
+};
+
+// Wall kick test matrices
+typedef struct {
+    Sint8 X;
+    Sint8 Y;
+} WallKickVector2;
+
+typedef enum {
+    WALLKICK_DIRECTION_RIGHT,
+    WALLKICK_DIRECTION_LEFT,
+} WallKickRotateDirection;
+
+#define PATTERN_MAX_KICK_TESTS 5
+
+// Index into here by target rotation index
+
+// J, L, S, T, Z tetromino tests
+// Right rotation
+const WallKickVector2 PatternNonLineWallKickRightRotationTests[4][PATTERN_MAX_KICK_TESTS] = {
+    { { 0, 0 }, {-1, 0}, {-1,  1 }, { 0,-2 }, {-1,-2 } }, // 270 ->   0
+    { { 0, 0 }, {-1, 0}, {-1, -1 }, { 0, 2 }, {-1, 2 } }, //   0 ->  90
+    { { 0, 0 }, { 1, 0}, { 1,  1 }, { 0,-2 }, { 1,-2 } }, //  90 ->  180
+    { { 0, 0 }, { 1, 0}, { 1, -1 }, { 0, 2 }, { 1, 2 } }, // 180 ->  270
+};
+
+// Left rotation
+const WallKickVector2 PatternNonLineWallKickLeftRotationTests[4][PATTERN_MAX_KICK_TESTS] = {
+    { { 0, 0 }, { 1, 0}, { 1,  1 }, { 0,-2 }, { 1,-2 } }, //  90 ->   0
+    { { 0, 0 }, {-1, 0}, {-1, -1 }, { 0, 2 }, {-1, 2 } }, // 180 ->  90
+    { { 0, 0 }, {-1, 0}, {-1,  1 }, { 0,-2 }, {-1,-2 } }, // 270 -> 180
+    { { 0, 0 }, { 1, 0}, { 1, -1 }, { 0, 2 }, { 1, 2 } }, //   0 -> 270
+};
+
+// I-piece tetromino tests
+// Right rotation
+const WallKickVector2 PatternLineWallKickRightRotationTests[4][PATTERN_MAX_KICK_TESTS] = {
+    { { 0, 0 }, { 1, 0}, {-2, 0 }, { 1, 2 }, {-2,-1 } }, // 270 ->   0
+    { { 0, 0 }, {-2, 0}, { 1, 0 }, {-2, 1 }, { 1,-2 } }, //   0 ->  90
+    { { 0, 0 }, {-1, 0}, { 2, 0 }, {-1,-2 }, { 2, 1 } }, //  90 ->  180
+    { { 0, 0 }, { 2, 0}, {-1, 0 }, { 2,-1 }, {-1, 2 } }, // 180 ->  270
+};
+
+// Left rotation
+const WallKickVector2 PatternLineWallKickLeftRotationTests[4][PATTERN_MAX_KICK_TESTS] = {
+    { { 0, 0 }, { 2, 0}, {-1, 0 }, { 2,-1 }, {-1, 2 } }, //  90 ->   0
+    { { 0, 0 }, { 1, 0}, {-2, 0 }, { 1, 2 }, {-2,-2 } }, // 180 ->  90
+    { { 0, 0 }, {-2, 0}, { 1, 0 }, {-2, 1 }, { 1,-2 } }, // 270 -> 180
+    { { 0, 0 }, {-1, 0}, { 2, 0 }, {-1,-2 }, { 2, 1 } }, //   0 -> 270
 };

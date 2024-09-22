@@ -380,8 +380,8 @@ Pattern* getCurrentPattern()
 Uint8 patternCollides(Pattern* pPattern, Sint8 dX, Sint8 dY)
 {
     int collisionFlags = COLLIDES_NONE;
-    for (int y = 0; y < pPattern->rows; ++y) {
-        for (int x = 0; x < pPattern->cols; ++x) {
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
             if (pPattern->occupancy[y][x])
             {
                 Sint8 gridX = x + g_GameState.patternGridX + dX;
@@ -415,6 +415,54 @@ Uint8 patternCollides(Pattern* pPattern, Sint8 dX, Sint8 dY)
     }
 
     return collisionFlags;
+}
+
+bool 
+ResolveWallKick(
+    WallKickRotateDirection rotateDirection,
+    Pattern* pRotatedPattern,
+    int rotationIndex,
+    WallKickVector2* pKickVectorOut)
+{
+    assert(rotateDirection == WALLKICK_DIRECTION_RIGHT ||
+           rotateDirection == WALLKICK_DIRECTION_LEFT);
+
+    const PatternType_t PatternType = g_GameState.currentPatternType;
+    const WallKickVector2* pTests = NULL;
+    if (PatternType == PATTERN_LINE_SHAPE)
+    {
+        if (rotateDirection == WALLKICK_DIRECTION_RIGHT)
+        {
+            pTests = PatternLineWallKickRightRotationTests[rotationIndex];
+        }
+        else
+        {
+            pTests = PatternLineWallKickLeftRotationTests[rotationIndex];
+        }
+    }
+    else
+    {
+        if (rotateDirection == WALLKICK_DIRECTION_RIGHT)
+        {
+            pTests = PatternNonLineWallKickRightRotationTests[rotationIndex];
+        }
+        else
+        {
+            pTests = PatternNonLineWallKickLeftRotationTests[rotationIndex];
+        }
+    }
+
+    for (Sint8 i = 0; i < PATTERN_MAX_KICK_TESTS; ++i)
+    {
+        WallKickVector2 kickDelta = pTests[i];
+        if (!patternCollides(pRotatedPattern, kickDelta.X, kickDelta.Y))
+        {
+            *pKickVectorOut = kickDelta;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 bool waitingToSpawn()
@@ -458,8 +506,8 @@ bool isLineBeingCleared(Sint8 gridY)
 void commitCurrentPattern()
 {
     Pattern* pPattern = getCurrentPattern();
-    for (int y = 0; y < pPattern->rows; ++y) {
-        for (int x = 0; x < pPattern->cols; ++x) {
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
             if (pPattern->occupancy[y][x])
             {
                 Sint8 gridX = x + g_GameState.patternGridX;
@@ -562,21 +610,20 @@ void checkInputs()
         int numRotations = PatternNumRotations[g_GameState.currentPatternType];
         int rotationIndex = (g_GameState.currentPatternRotation + 1) % numRotations;
 
-        Pattern* pRotatedPattern = g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
+        Pattern* pRotatedPattern = 
+            g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
 
-        // Resolve any collisions with the stage edge
-        Sint8 dX = 0;
-        Uint8 CollisionFlags = patternCollides(pRotatedPattern, dX, 0);
-        while (CollisionFlags == COLLIDES_RIGHT || CollisionFlags == COLLIDES_LEFT)
-        {
-            dX += (CollisionFlags == COLLIDES_RIGHT ? -1 : 1);
-            CollisionFlags = patternCollides(pRotatedPattern, dX, 0);
-        }
-
-        if (CollisionFlags == COLLIDES_NONE)
+        // Resolve any collisions due to rotation, if possible
+        WallKickVector2 kickVector;
+        if (ResolveWallKick(
+                WALLKICK_DIRECTION_RIGHT,
+                pRotatedPattern,
+                rotationIndex,
+                &kickVector))
         {
             g_GameState.currentPatternRotation = rotationIndex;
-            g_GameState.patternGridX += dX;
+            g_GameState.patternGridX += kickVector.X;
+            g_GameState.patternGridY += kickVector.Y;
         }
     }
     else if (g_GameState.inputRotateLeftPressed && !g_GameState.inputRotateRightPressed)
@@ -586,21 +633,20 @@ void checkInputs()
             g_GameState.currentPatternRotation == 0 ? 
                 numRotations - 1 : 
                 g_GameState.currentPatternRotation - 1;
-        Pattern* pRotatedPattern = g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
+        Pattern* pRotatedPattern = 
+            g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
 
-        // Resolve any collisions with the stage edge
-        Sint8 dX = 0;
-        Uint8 CollisionFlags = patternCollides(pRotatedPattern, dX, 0);
-        while (CollisionFlags == COLLIDES_RIGHT || CollisionFlags == COLLIDES_LEFT)
-        {
-            dX += (CollisionFlags == COLLIDES_RIGHT ? -1 : 1);
-            CollisionFlags = patternCollides(pRotatedPattern, dX, 0);
-        }
-
-        if (CollisionFlags == COLLIDES_NONE)
+        // Resolve any collisions due to rotation, if possible
+        WallKickVector2 kickVector;
+        if (ResolveWallKick(
+                WALLKICK_DIRECTION_LEFT,
+                pRotatedPattern,
+                rotationIndex,
+                &kickVector))
         {
             g_GameState.currentPatternRotation = rotationIndex;
-            g_GameState.patternGridX += dX;
+            g_GameState.patternGridX += kickVector.X;
+            g_GameState.patternGridY += kickVector.Y;
         }
     }
 
@@ -1035,8 +1081,8 @@ void renderShadowPattern(SDL_Renderer* pRenderer)
 
     int toDrawIndex = 0;
     SDL_Rect toDraw[4];
-    for (int y = 0; y < pPattern->rows; ++y) {
-        for (int x = 0; x < pPattern->cols; ++x) {
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
             if (pPattern->occupancy[y][x])
             {
                 SDL_Rect* pRect = &toDraw[toDrawIndex];
@@ -1078,8 +1124,8 @@ void renderCurrentPattern(SDL_Renderer* pRenderer)
 
     int toDrawIndex = 0;
     SDL_Rect toDraw[4];
-    for (int y = 0; y < pPattern->rows; ++y) {
-        for (int x = 0; x < pPattern->cols; ++x) {
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
             if (pPattern->occupancy[y][x])
             {
                 const int GridX = x + g_GameState.patternGridX;
@@ -1156,8 +1202,8 @@ void renderNextPattern(SDL_Renderer* pRenderer, PatternType_t patternType, int b
     
     int toDrawIndex = 0;
     SDL_Rect toDraw[4];
-    for (int y = 0; y < pPattern->rows; ++y) {
-        for (int x = 0; x < pPattern->cols; ++x) {
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
             if (pPattern->occupancy[y][x])
             {
                 SDL_Rect* pRect = &toDraw[toDrawIndex];
@@ -1281,8 +1327,8 @@ void renderHoldPattern(SDL_Renderer* pRenderer)
     
     int toDrawIndex = 0;
     SDL_Rect toDraw[4];
-    for (int y = 0; y < pPattern->rows; ++y) {
-        for (int x = 0; x < pPattern->cols; ++x) {
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
             if (pPattern->occupancy[y][x])
             {
                 SDL_Rect* pRect = &toDraw[toDrawIndex];
