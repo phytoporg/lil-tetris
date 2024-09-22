@@ -18,9 +18,6 @@
 
 #define FPS 60.0f
 
-#define INPUT_REPEAT_DELAY_MS 30
-#define INPUT_REPEAT_INTERVAL_MS 16
-
 #define GRID_HEIGHT 20
 #define GRID_WIDTH 10
 #define GRID_UPPER_X 200
@@ -322,7 +319,47 @@ void initializeGameState()
         &(g_GameState.patternGridY));
 
     resetInputStates();
+
+
+    InputContext* pInput = &(g_GameState.InputContext);
     InputInitializeContext(&(g_GameState.InputContext));
+
+    // Setup the input map
+    pInput->InputMap[INPUTEVENT_QUIT].Scancodes[0] = SDL_SCANCODE_Q;
+    pInput->InputMap[INPUTEVENT_QUIT].Scancodes[1] = SDL_SCANCODE_ESCAPE;
+    pInput->InputMap[INPUTEVENT_QUIT].NumScancodes = 2;
+    
+    pInput->InputMap[INPUTEVENT_UP].Scancodes[0] = SDL_SCANCODE_W;
+    pInput->InputMap[INPUTEVENT_UP].Scancodes[1] = SDL_SCANCODE_UP;
+    pInput->InputMap[INPUTEVENT_UP].NumScancodes = 2;
+
+    pInput->InputMap[INPUTEVENT_DOWN].Scancodes[0] = SDL_SCANCODE_S;
+    pInput->InputMap[INPUTEVENT_DOWN].Scancodes[1] = SDL_SCANCODE_DOWN;
+    pInput->InputMap[INPUTEVENT_DOWN].NumScancodes = 2;
+
+    pInput->InputMap[INPUTEVENT_LEFT].Scancodes[0] = SDL_SCANCODE_A;
+    pInput->InputMap[INPUTEVENT_LEFT].Scancodes[1] = SDL_SCANCODE_LEFT;
+    pInput->InputMap[INPUTEVENT_LEFT].NumScancodes = 2;
+
+    pInput->InputMap[INPUTEVENT_RIGHT].Scancodes[0] = SDL_SCANCODE_D;
+    pInput->InputMap[INPUTEVENT_RIGHT].Scancodes[1] = SDL_SCANCODE_RIGHT;
+    pInput->InputMap[INPUTEVENT_RIGHT].NumScancodes = 2;
+
+    pInput->InputMap[INPUTEVENT_ROTATERIGHT].Scancodes[0] = SDL_SCANCODE_K;
+    pInput->InputMap[INPUTEVENT_ROTATERIGHT].NumScancodes = 1;
+
+    pInput->InputMap[INPUTEVENT_ROTATELEFT].Scancodes[0] = SDL_SCANCODE_J;
+    pInput->InputMap[INPUTEVENT_ROTATELEFT].NumScancodes = 1;
+
+    pInput->InputMap[INPUTEVENT_HOLD].Scancodes[0] = SDL_SCANCODE_SPACE;
+    pInput->InputMap[INPUTEVENT_HOLD].NumScancodes = 1;
+
+    pInput->InputMap[INPUTEVENT_PAUSE].Scancodes[0] = SDL_SCANCODE_P;
+    pInput->InputMap[INPUTEVENT_PAUSE].NumScancodes = 1;
+
+    pInput->InputMap[INPUTEVENT_BEGINGAME].Scancodes[0] = SDL_SCANCODE_SPACE;
+    pInput->InputMap[INPUTEVENT_BEGINGAME].NumScancodes = 1;
+
 }
 
 Pattern* getCurrentPattern()
@@ -784,8 +821,13 @@ void updateGameState()
         }
         else if (g_GameState.inputDownPressed)
         {
-            commitCurrentPattern();
-            beginSpawnNextPattern();
+            // Only commit if drop was pressed, not held
+            InputContext* pInput = &(g_GameState.InputContext);
+            if (InputHasEventPressed(pInput, INPUTEVENT_DOWN))
+            {
+                commitCurrentPattern();
+                beginSpawnNextPattern();
+            }
         }
         else if (g_GameState.lockBeginFrame == 0)
         {
@@ -1496,6 +1538,10 @@ int main(int argc, char** argv)
 
         resetInputStates();
 
+        // Main loop
+        Uint64 startTime = SDL_GetPerformanceCounter();
+
+        // Pump events, gotta do this before polling input
         SDL_Event event;
         while(SDL_PollEvent(&event) != 0)
         {
@@ -1503,61 +1549,22 @@ int main(int argc, char** argv)
             {
                 shouldQuit = true;
             }
-            else if (event.type == SDL_KEYDOWN)
-            {
-                if (event.key.keysym.sym == SDLK_ESCAPE || 
-                    event.key.keysym.sym == SDLK_q)
-                {
-                    shouldQuit = true;
-                }
-                else if (event.key.keysym.sym == SDLK_w || 
-                         event.key.keysym.sym == SDLK_UP)
-                {
-                    g_GameState.inputUpPressed = true;
-                }
-                else if (event.key.keysym.sym == SDLK_s || 
-                         event.key.keysym.sym == SDLK_DOWN)
-                {
-                    g_GameState.inputDownPressed = true;
-                }
-                else if (event.key.keysym.sym == SDLK_a || 
-                         event.key.keysym.sym == SDLK_LEFT)
-                {
-                    g_GameState.inputLeftPressed = true;
-                }
-                else if (event.key.keysym.sym == SDLK_d || 
-                         event.key.keysym.sym == SDLK_RIGHT)
-                {
-                    g_GameState.inputRightPressed = true;
-                }
-                else if (event.key.keysym.sym == SDLK_k)
-                {
-                    g_GameState.inputRotateRightPressed = true;
-                }
-                else if (event.key.keysym.sym == SDLK_j)
-                {
-                    g_GameState.inputRotateLeftPressed = true;
-                }
-                else if (event.key.keysym.sym == SDLK_SPACE)
-                {
-                    if (g_GameState.isIntro)
-                    {
-                        g_GameState.isIntro = false;
-                    }
-                    else
-                    {
-                        g_GameState.inputHoldPiece = true;
-                    }
-                }
-                else if (event.key.keysym.sym == SDLK_p)
-                {
-                    g_GameState.inputPauseGame = true;
-                }
-            }
         }
 
-        // Main loop
-        Uint64 startTime = SDL_GetPerformanceCounter();
+        InputContext* pInput = &(g_GameState.InputContext);
+        InputUpdateContext(pInput);
+
+        shouldQuit = InputHasEventPressed(pInput, INPUTEVENT_QUIT);
+        g_GameState.inputUpPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_UP);
+        g_GameState.inputDownPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_DOWN);
+        g_GameState.inputLeftPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_LEFT);
+        g_GameState.inputRightPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_RIGHT);
+        g_GameState.inputRotateRightPressed = InputHasEventPressed(pInput, INPUTEVENT_ROTATERIGHT);
+        g_GameState.inputRotateLeftPressed = InputHasEventPressed(pInput, INPUTEVENT_ROTATELEFT);
+        g_GameState.inputHoldPiece = InputHasEventPressed(pInput, INPUTEVENT_HOLD);
+        g_GameState.inputPauseGame = InputHasEventPressed(pInput, INPUTEVENT_PAUSE);
+        g_GameState.inputBeginGame = InputHasEventPressed(pInput, INPUTEVENT_BEGINGAME);
+
 
         if (!g_GameState.isIntro)
         {
