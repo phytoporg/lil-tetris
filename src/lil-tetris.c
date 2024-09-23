@@ -53,6 +53,7 @@
 
 #define LEVELUP_LOC_X 240
 #define LEVELUP_LOC_Y 240
+#define LEVELUP_RISE_SPEED_PPS 10
 
 #define NEXT_PATTERN_TEXT_X 450
 #define NEXT_PATTERN_TEXT_Y 30
@@ -79,9 +80,11 @@
 
 #define LOCK_DELAY_FRAMES 60
 
-#define START_DROP_SPEED 5
+#define START_DROP_SPEED 1
 
 #define NEXT_QUEUE_SIZE 4
+
+#define LEVELUP_LINE_INTERVAL 10
 
 // Types
 typedef struct
@@ -1047,7 +1050,8 @@ void updateGameState()
 
             AudioPlayLineClear();
             g_GameState.totalClearedLines += linesCleared;
-            g_GameState.currentLevel = (g_GameState.totalClearedLines / 10) + 1;
+            g_GameState.currentLevel = 
+                (g_GameState.totalClearedLines / LEVELUP_LINE_INTERVAL) + 1;
             g_GameState.dropSpeed = START_DROP_SPEED + g_GameState.currentLevel;
             g_GameState.clearLinesFrame = g_GameState.currentFrame;
 
@@ -1661,6 +1665,10 @@ void renderLevelUpText(SDL_Renderer* pRenderer)
                 assert(g_GameState.hLevelUpText != TEXT_INVALID_HANDLE);
             }
 
+            // Have the text float upwards over time
+            const float t = LevelUpFrames / FPS;
+            const int OffsetY = t * LEVELUP_RISE_SPEED_PPS;
+
             TextSetEntryData(
                 g_GameState.hLevelUpText,
                 pRenderer,
@@ -1669,7 +1677,7 @@ void renderLevelUpText(SDL_Renderer* pRenderer)
                     g_GameState.hLevelUpText,
                     pRenderer,
                     LEVELUP_LOC_X,
-                    LEVELUP_LOC_Y))
+                    LEVELUP_LOC_Y - OffsetY))
             {
                 fprintf(stderr, "Failed to draw intro text\n");
             }
