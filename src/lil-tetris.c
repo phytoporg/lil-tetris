@@ -45,6 +45,12 @@
 #define INTRO_LOC_X 130
 #define INTRO_LOC_Y 210
 
+#define GAMEOVER_LOC_X 230
+#define GAMEOVER_LOC_Y 210
+
+#define RETRY_LOC_X 155
+#define RETRY_LOC_Y 245
+
 #define NEXT_PATTERN_TEXT_X 450
 #define NEXT_PATTERN_TEXT_Y 30
 #define NEXT_PATTERN_X 450
@@ -62,6 +68,8 @@
 #define CLEAR_LINES_FLASH_DURATION 10
 
 #define GAMEOVER_ANIM_DURATION_FRAMES 60
+#define GAMEOVER_SHOW_GAMEOVER_FRAMES 50
+#define GAMEOVER_SHOW_RETRY_FRAMES 90
 
 #define LOCK_DELAY_FRAMES 60
 
@@ -122,6 +130,8 @@ typedef struct
     HTEXT      hBestText;
     HTEXT      hPausedText;
     HTEXT      hIntroText;
+    HTEXT      hGameOverText;
+    HTEXT      hRetryText;
     bool       inputLeftPressed;
     bool       inputRightPressed;
     bool       inputDownPressed;
@@ -131,6 +141,7 @@ typedef struct
     bool       inputHoldPiece;
     bool       inputPauseGame;
     bool       inputBeginGame;
+    bool       inputRetryGame;
     bool       isPaused;
     bool       isIntro;
     bool       isGameOver;
@@ -172,6 +183,7 @@ void resetInputStates()
     g_GameState.inputHoldPiece = false;
     g_GameState.inputPauseGame = false;
     g_GameState.inputBeginGame = false;
+    g_GameState.inputRetryGame = false;
 }
 
 void resetRandomBag()
@@ -311,6 +323,8 @@ void initializeGameState()
     g_GameState.hBestText = TEXT_INVALID_HANDLE;
     g_GameState.hPausedText = TEXT_INVALID_HANDLE;
     g_GameState.hIntroText = TEXT_INVALID_HANDLE;
+    g_GameState.hGameOverText = TEXT_INVALID_HANDLE;
+    g_GameState.hRetryText = TEXT_INVALID_HANDLE;
     g_GameState.isPaused = false;
     g_GameState.isIntro = true;
     g_GameState.isGameOver = false;
@@ -323,7 +337,6 @@ void initializeGameState()
         &(g_GameState.patternGridY));
 
     resetInputStates();
-
 
     InputContext* pInput = &(g_GameState.InputContext);
     InputInitializeContext(&(g_GameState.InputContext));
@@ -770,7 +783,7 @@ void updateGameState()
             GRID_HEIGHT - 1;
 
         bool hasClearedThisLine = true;
-        for (int x = 0; x < GRID_WIDTH; ++x) {
+        for (int x = 0; x < GRID_WIDTH && LineToClear < GRID_HEIGHT; ++x) {
             if (g_Grid[LineToClear][x].patternType != PATTERN_NONE)
             {
                 hasClearedThisLine = false;
@@ -787,7 +800,7 @@ void updateGameState()
         }
 
         // We done?
-        if (GameOverFrames >= GAMEOVER_ANIM_DURATION_FRAMES)
+        if (GameOverFrames == GAMEOVER_ANIM_DURATION_FRAMES)
         {
             // Reset stats and level on loss
             g_GameState.totalClearedLines = 0;
@@ -795,18 +808,23 @@ void updateGameState()
             g_GameState.pCurrentTheme = g_DefaultThemes;
             g_GameState.dropSpeed = START_DROP_SPEED;
             g_GameState.holdPatternType = PATTERN_NONE;
-            g_GameState.currentPatternType = popFromNextQueue();
-            initializeNextQueue();
 
             beginSpawnNextPattern();
-            g_GameState.isGameOver = false;
-            g_GameState.renderCells = true;
         }
-        else
+
+        if (GameOverFrames >= GAMEOVER_SHOW_RETRY_FRAMES &&
+            g_GameState.inputRetryGame)
         {
-            g_GameState.currentFrame++;
-            return;
+            g_GameState.renderCells = true;
+            g_GameState.isGameOver = false;
+
+            initializeNextQueue();
+            g_GameState.currentPatternType = popFromNextQueue();
+            spawnNextPattern();
         }
+
+        g_GameState.currentFrame++;
+        return;
     }
 
     if (waitingToSpawn())
@@ -1500,6 +1518,58 @@ void renderIntroText(SDL_Renderer* pRenderer)
     }
 }
 
+void renderGameOverText(SDL_Renderer* pRenderer)
+{
+    const int GameOverFrames =
+        g_GameState.currentFrame - g_GameState.gameOverFrame;
+    if (g_GameState.isGameOver)
+    {
+        if (GameOverFrames >= GAMEOVER_SHOW_GAMEOVER_FRAMES)
+        {
+            if (g_GameState.hGameOverText == TEXT_INVALID_HANDLE)
+            {
+                g_GameState.hGameOverText = TextCreateEntry();
+                assert(g_GameState.hGameOverText != TEXT_INVALID_HANDLE);
+            }
+
+            TextSetEntryData(
+                g_GameState.hGameOverText,
+                pRenderer,
+                "GAME OVER");
+            if (!TextDrawEntry(
+                    g_GameState.hGameOverText,
+                    pRenderer,
+                    GAMEOVER_LOC_X,
+                    GAMEOVER_LOC_Y))
+            {
+                fprintf(stderr, "Failed to draw intro text\n");
+            }
+        }
+        
+        if (GameOverFrames >= GAMEOVER_SHOW_RETRY_FRAMES)
+        {
+            if (g_GameState.hRetryText == TEXT_INVALID_HANDLE)
+            {
+                g_GameState.hRetryText = TextCreateEntry();
+                assert(g_GameState.hRetryText != TEXT_INVALID_HANDLE);
+            }
+
+            TextSetEntryData(
+                g_GameState.hRetryText,
+                pRenderer,
+                "PRESS 'J' TO TRY AGAIN");
+            if (!TextDrawEntry(
+                    g_GameState.hRetryText,
+                    pRenderer,
+                    RETRY_LOC_X,
+                    RETRY_LOC_Y))
+            {
+                fprintf(stderr, "Failed to draw intro text\n");
+            }
+        }
+    }
+}
+
 void renderGrid(SDL_Renderer* pRenderer) 
 {
     // Reset the rect array rect counts
@@ -1645,8 +1715,10 @@ int main(int argc, char** argv)
         g_GameState.inputHoldPiece = InputHasEventPressed(pInput, INPUTEVENT_HOLD);
         g_GameState.inputPauseGame = InputHasEventPressed(pInput, INPUTEVENT_PAUSE);
         g_GameState.inputBeginGame = InputHasEventPressed(pInput, INPUTEVENT_BEGINGAME);
+        g_GameState.inputRetryGame = InputHasEventPressed(pInput, INPUTEVENT_ROTATELEFT);
 
         g_GameState.inputHoldPiece &= !g_GameState.isIntro;
+        g_GameState.inputRetryGame &= g_GameState.isGameOver;
 
 
         if (!g_GameState.isIntro)
@@ -1666,6 +1738,7 @@ int main(int argc, char** argv)
         renderStats(pRender);
         renderPauseText(pRender);
         renderIntroText(pRender);
+        renderGameOverText(pRender);
 
         Uint8 GridBaseX;
         Uint8 GridBaseY;
