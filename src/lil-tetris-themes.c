@@ -146,3 +146,13 @@ Color* ThemeGetInnerColor(PatternTheme* pThemes, int patternIndex)
 
     return &(pThemes[patternIndex].Inner);
 }
+
+Color ThemeBlendColor(Color* pColorA, Color* pColorB, float alpha)
+{
+    Color returnColor;
+    returnColor.r = alpha * pColorB->r + (1.0f - alpha) * pColorA->r;
+    returnColor.g = alpha * pColorB->g + (1.0f - alpha) * pColorA->g;
+    returnColor.b = alpha * pColorB->b + (1.0f - alpha) * pColorA->b;
+
+    return returnColor;
+}

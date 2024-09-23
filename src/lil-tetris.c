@@ -18,9 +18,6 @@
 
 #define FPS 60.0f
 
-#define INPUT_REPEAT_DELAY_MS 30
-#define INPUT_REPEAT_INTERVAL_MS 16
-
 #define GRID_HEIGHT 20
 #define GRID_WIDTH 10
 #define GRID_UPPER_X 200
@@ -48,6 +45,15 @@
 #define INTRO_LOC_X 130
 #define INTRO_LOC_Y 210
 
+#define GAMEOVER_LOC_X 230
+#define GAMEOVER_LOC_Y 210
+
+#define RETRY_LOC_X 155
+#define RETRY_LOC_Y 245
+
+#define LEVELUP_LOC_X 240
+#define LEVELUP_LOC_Y 240
+
 #define NEXT_PATTERN_TEXT_X 450
 #define NEXT_PATTERN_TEXT_Y 30
 #define NEXT_PATTERN_X 450
@@ -60,13 +66,20 @@
 #define HOLD_PATTERN_Y 50
 #define HOLD_PATTERN_BORDER 5
 
-#define SPAWN_DELAY_FRAMES 15
+#define SPAWN_DELAY_FRAMES 6
 #define CLEAR_LINES_FRAMES 15
 #define CLEAR_LINES_FLASH_DURATION 10
 
+#define GAMEOVER_ANIM_DURATION_FRAMES 60
+#define GAMEOVER_SHOW_GAMEOVER_FRAMES 50
+#define GAMEOVER_SHOW_RETRY_FRAMES 90
+
+#define LEVELUP_ANIM_DURATION_FRAMES 15
+#define LEVELUP_TEXT_DURATION_FRAMES 70
+
 #define LOCK_DELAY_FRAMES 60
 
-#define START_DROP_SPEED 2
+#define START_DROP_SPEED 5
 
 #define NEXT_QUEUE_SIZE 4
 
@@ -108,7 +121,9 @@ typedef struct
     Uint64     lastDropFrame;
     Uint64     preSpawnFrame;
     Uint64     lastSpawnFrame;
+    Uint64     levelUpFrame;
     Uint64     lockBeginFrame;
+    Uint64     gameOverFrame;
     Uint8      dropSpeed;
     Sint8      clearLines[GRID_HEIGHT];
     Uint64     clearLinesFrame;
@@ -122,6 +137,9 @@ typedef struct
     HTEXT      hBestText;
     HTEXT      hPausedText;
     HTEXT      hIntroText;
+    HTEXT      hGameOverText;
+    HTEXT      hRetryText;
+    HTEXT      hLevelUpText;
     bool       inputLeftPressed;
     bool       inputRightPressed;
     bool       inputDownPressed;
@@ -131,6 +149,7 @@ typedef struct
     bool       inputHoldPiece;
     bool       inputPauseGame;
     bool       inputBeginGame;
+    bool       inputRetryGame;
     bool       isPaused;
     bool       isIntro;
     bool       isGameOver;
@@ -172,6 +191,7 @@ void resetInputStates()
     g_GameState.inputHoldPiece = false;
     g_GameState.inputPauseGame = false;
     g_GameState.inputBeginGame = false;
+    g_GameState.inputRetryGame = false;
 }
 
 void resetRandomBag()
@@ -296,7 +316,9 @@ void initializeGameState()
     g_GameState.lastDropFrame = 0;
     g_GameState.preSpawnFrame = 0;
     g_GameState.lastSpawnFrame = 0;
+    g_GameState.levelUpFrame = 0;
     g_GameState.lockBeginFrame = 0;
+    g_GameState.gameOverFrame = 0;
     g_GameState.dropSpeed = START_DROP_SPEED; // Drops per second
     memset(g_GameState.clearLines, -1, sizeof(g_GameState.clearLines));
     g_GameState.clearLinesFrame = 0;
@@ -310,6 +332,9 @@ void initializeGameState()
     g_GameState.hBestText = TEXT_INVALID_HANDLE;
     g_GameState.hPausedText = TEXT_INVALID_HANDLE;
     g_GameState.hIntroText = TEXT_INVALID_HANDLE;
+    g_GameState.hGameOverText = TEXT_INVALID_HANDLE;
+    g_GameState.hRetryText = TEXT_INVALID_HANDLE;
+    g_GameState.hLevelUpText = TEXT_INVALID_HANDLE;
     g_GameState.isPaused = false;
     g_GameState.isIntro = true;
     g_GameState.isGameOver = false;
@@ -322,7 +347,46 @@ void initializeGameState()
         &(g_GameState.patternGridY));
 
     resetInputStates();
+
+    InputContext* pInput = &(g_GameState.InputContext);
     InputInitializeContext(&(g_GameState.InputContext));
+
+    // Setup the input map
+    pInput->InputMap[INPUTEVENT_QUIT].Scancodes[0] = SDL_SCANCODE_Q;
+    pInput->InputMap[INPUTEVENT_QUIT].Scancodes[1] = SDL_SCANCODE_ESCAPE;
+    pInput->InputMap[INPUTEVENT_QUIT].NumScancodes = 2;
+    
+    pInput->InputMap[INPUTEVENT_UP].Scancodes[0] = SDL_SCANCODE_W;
+    pInput->InputMap[INPUTEVENT_UP].Scancodes[1] = SDL_SCANCODE_UP;
+    pInput->InputMap[INPUTEVENT_UP].NumScancodes = 2;
+
+    pInput->InputMap[INPUTEVENT_DOWN].Scancodes[0] = SDL_SCANCODE_S;
+    pInput->InputMap[INPUTEVENT_DOWN].Scancodes[1] = SDL_SCANCODE_DOWN;
+    pInput->InputMap[INPUTEVENT_DOWN].NumScancodes = 2;
+
+    pInput->InputMap[INPUTEVENT_LEFT].Scancodes[0] = SDL_SCANCODE_A;
+    pInput->InputMap[INPUTEVENT_LEFT].Scancodes[1] = SDL_SCANCODE_LEFT;
+    pInput->InputMap[INPUTEVENT_LEFT].NumScancodes = 2;
+
+    pInput->InputMap[INPUTEVENT_RIGHT].Scancodes[0] = SDL_SCANCODE_D;
+    pInput->InputMap[INPUTEVENT_RIGHT].Scancodes[1] = SDL_SCANCODE_RIGHT;
+    pInput->InputMap[INPUTEVENT_RIGHT].NumScancodes = 2;
+
+    pInput->InputMap[INPUTEVENT_ROTATERIGHT].Scancodes[0] = SDL_SCANCODE_K;
+    pInput->InputMap[INPUTEVENT_ROTATERIGHT].NumScancodes = 1;
+
+    pInput->InputMap[INPUTEVENT_ROTATELEFT].Scancodes[0] = SDL_SCANCODE_J;
+    pInput->InputMap[INPUTEVENT_ROTATELEFT].NumScancodes = 1;
+
+    pInput->InputMap[INPUTEVENT_HOLD].Scancodes[0] = SDL_SCANCODE_SPACE;
+    pInput->InputMap[INPUTEVENT_HOLD].NumScancodes = 1;
+
+    pInput->InputMap[INPUTEVENT_PAUSE].Scancodes[0] = SDL_SCANCODE_P;
+    pInput->InputMap[INPUTEVENT_PAUSE].NumScancodes = 1;
+
+    pInput->InputMap[INPUTEVENT_BEGINGAME].Scancodes[0] = SDL_SCANCODE_SPACE;
+    pInput->InputMap[INPUTEVENT_BEGINGAME].NumScancodes = 1;
+
 }
 
 Pattern* getCurrentPattern()
@@ -343,8 +407,8 @@ Pattern* getCurrentPattern()
 Uint8 patternCollides(Pattern* pPattern, Sint8 dX, Sint8 dY)
 {
     int collisionFlags = COLLIDES_NONE;
-    for (int y = 0; y < pPattern->rows; ++y) {
-        for (int x = 0; x < pPattern->cols; ++x) {
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
             if (pPattern->occupancy[y][x])
             {
                 Sint8 gridX = x + g_GameState.patternGridX + dX;
@@ -378,6 +442,54 @@ Uint8 patternCollides(Pattern* pPattern, Sint8 dX, Sint8 dY)
     }
 
     return collisionFlags;
+}
+
+bool 
+ResolveWallKick(
+    WallKickRotateDirection rotateDirection,
+    Pattern* pRotatedPattern,
+    int rotationIndex,
+    WallKickVector2* pKickVectorOut)
+{
+    assert(rotateDirection == WALLKICK_DIRECTION_RIGHT ||
+           rotateDirection == WALLKICK_DIRECTION_LEFT);
+
+    const PatternType_t PatternType = g_GameState.currentPatternType;
+    const WallKickVector2* pTests = NULL;
+    if (PatternType == PATTERN_LINE_SHAPE)
+    {
+        if (rotateDirection == WALLKICK_DIRECTION_RIGHT)
+        {
+            pTests = PatternLineWallKickRightRotationTests[rotationIndex];
+        }
+        else
+        {
+            pTests = PatternLineWallKickLeftRotationTests[rotationIndex];
+        }
+    }
+    else
+    {
+        if (rotateDirection == WALLKICK_DIRECTION_RIGHT)
+        {
+            pTests = PatternNonLineWallKickRightRotationTests[rotationIndex];
+        }
+        else
+        {
+            pTests = PatternNonLineWallKickLeftRotationTests[rotationIndex];
+        }
+    }
+
+    for (Sint8 i = 0; i < PATTERN_MAX_KICK_TESTS; ++i)
+    {
+        WallKickVector2 kickDelta = pTests[i];
+        if (!patternCollides(pRotatedPattern, kickDelta.X, kickDelta.Y))
+        {
+            *pKickVectorOut = kickDelta;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 bool waitingToSpawn()
@@ -420,9 +532,14 @@ bool isLineBeingCleared(Sint8 gridY)
 
 void commitCurrentPattern()
 {
+    if (g_GameState.isGameOver)
+    {
+        return;
+    }
+
     Pattern* pPattern = getCurrentPattern();
-    for (int y = 0; y < pPattern->rows; ++y) {
-        for (int x = 0; x < pPattern->cols; ++x) {
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
             if (pPattern->occupancy[y][x])
             {
                 Sint8 gridX = x + g_GameState.patternGridX;
@@ -432,7 +549,8 @@ void commitCurrentPattern()
                 {
                     // If we commit any cells above the grid, the game is over
                     g_GameState.isGameOver = true;
-                    continue;
+                    g_GameState.gameOverFrame = g_GameState.currentFrame;
+                    return;
                 }
 
                 g_Grid[gridY][gridX].patternType = g_GameState.currentPatternType;
@@ -525,21 +643,20 @@ void checkInputs()
         int numRotations = PatternNumRotations[g_GameState.currentPatternType];
         int rotationIndex = (g_GameState.currentPatternRotation + 1) % numRotations;
 
-        Pattern* pRotatedPattern = g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
+        Pattern* pRotatedPattern = 
+            g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
 
-        // Resolve any collisions with the stage edge
-        Sint8 dX = 0;
-        Uint8 CollisionFlags = patternCollides(pRotatedPattern, dX, 0);
-        while (CollisionFlags == COLLIDES_RIGHT || CollisionFlags == COLLIDES_LEFT)
-        {
-            dX += (CollisionFlags == COLLIDES_RIGHT ? -1 : 1);
-            CollisionFlags = patternCollides(pRotatedPattern, dX, 0);
-        }
-
-        if (CollisionFlags == COLLIDES_NONE)
+        // Resolve any collisions due to rotation, if possible
+        WallKickVector2 kickVector;
+        if (ResolveWallKick(
+                WALLKICK_DIRECTION_RIGHT,
+                pRotatedPattern,
+                rotationIndex,
+                &kickVector))
         {
             g_GameState.currentPatternRotation = rotationIndex;
-            g_GameState.patternGridX += dX;
+            g_GameState.patternGridX += kickVector.X;
+            g_GameState.patternGridY += kickVector.Y;
         }
     }
     else if (g_GameState.inputRotateLeftPressed && !g_GameState.inputRotateRightPressed)
@@ -549,21 +666,20 @@ void checkInputs()
             g_GameState.currentPatternRotation == 0 ? 
                 numRotations - 1 : 
                 g_GameState.currentPatternRotation - 1;
-        Pattern* pRotatedPattern = g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
+        Pattern* pRotatedPattern = 
+            g_PatternLUT[g_GameState.currentPatternType][rotationIndex];
 
-        // Resolve any collisions with the stage edge
-        Sint8 dX = 0;
-        Uint8 CollisionFlags = patternCollides(pRotatedPattern, dX, 0);
-        while (CollisionFlags == COLLIDES_RIGHT || CollisionFlags == COLLIDES_LEFT)
-        {
-            dX += (CollisionFlags == COLLIDES_RIGHT ? -1 : 1);
-            CollisionFlags = patternCollides(pRotatedPattern, dX, 0);
-        }
-
-        if (CollisionFlags == COLLIDES_NONE)
+        // Resolve any collisions due to rotation, if possible
+        WallKickVector2 kickVector;
+        if (ResolveWallKick(
+                WALLKICK_DIRECTION_LEFT,
+                pRotatedPattern,
+                rotationIndex,
+                &kickVector))
         {
             g_GameState.currentPatternRotation = rotationIndex;
-            g_GameState.patternGridX += dX;
+            g_GameState.patternGridX += kickVector.X;
+            g_GameState.patternGridY += kickVector.Y;
         }
     }
 
@@ -664,7 +780,62 @@ void updateGameState()
         return;
     }
 
-    g_GameState.renderCells = true;
+    // Check losing condition
+    if (g_GameState.isGameOver)
+    {
+        g_GameState.preSpawnFrame = 0;
+
+        // Start blowing up lines
+        const int GameOverFrames =
+            g_GameState.currentFrame - g_GameState.gameOverFrame;
+        const int LineToClear = 
+            ((float)GameOverFrames / GAMEOVER_ANIM_DURATION_FRAMES) *
+            GRID_HEIGHT - 1;
+
+        bool hasClearedThisLine = true;
+        for (int x = 0; x < GRID_WIDTH && LineToClear < GRID_HEIGHT; ++x) {
+            if (g_Grid[LineToClear][x].patternType != PATTERN_NONE)
+            {
+                hasClearedThisLine = false;
+                break;
+            }
+        }
+
+        if (!hasClearedThisLine)
+        {
+            emitLineClearParticles(LineToClear);
+            for (int x = 0; x < GRID_WIDTH; ++x) {
+                g_Grid[LineToClear][x].patternType = PATTERN_NONE;
+            }
+        }
+
+        // We done?
+        if (GameOverFrames == GAMEOVER_ANIM_DURATION_FRAMES)
+        {
+            // Reset stats and level on loss
+            g_GameState.totalClearedLines = 0;
+            g_GameState.currentLevel = 1;
+            g_GameState.pCurrentTheme = g_DefaultThemes;
+            g_GameState.dropSpeed = START_DROP_SPEED;
+            g_GameState.holdPatternType = PATTERN_NONE;
+
+            beginSpawnNextPattern();
+        }
+
+        if (GameOverFrames >= GAMEOVER_SHOW_RETRY_FRAMES &&
+            g_GameState.inputRetryGame)
+        {
+            g_GameState.renderCells = true;
+            g_GameState.isGameOver = false;
+
+            initializeNextQueue();
+            g_GameState.currentPatternType = popFromNextQueue();
+            spawnNextPattern();
+        }
+
+        g_GameState.currentFrame++;
+        return;
+    }
 
     if (waitingToSpawn())
     {
@@ -673,7 +844,6 @@ void updateGameState()
     }
     else if (isSpawnFrame())
     {
-        commitCurrentPattern();
         spawnNextPattern();
     }
 
@@ -685,7 +855,7 @@ void updateGameState()
         if (sinceClearedLines >= CLEAR_LINES_FRAMES)
         {
             // Collapse cleared lines
-            for (Sint8 i = 0; i < sizeof(g_GameState.clearLines); ++i)
+            for (Sint8 i = 0; i < GRID_HEIGHT; ++i)
             {
                 Sint8 y = g_GameState.clearLines[i];
                 if (y < 0)
@@ -709,6 +879,8 @@ void updateGameState()
         g_GameState.currentFrame++;
         return;
     }
+
+    g_GameState.renderCells = true;
 
     // Check for natural drops, player-induced drops or quick drops
     if (g_GameState.inputUpPressed)
@@ -784,8 +956,13 @@ void updateGameState()
         }
         else if (g_GameState.inputDownPressed)
         {
-            commitCurrentPattern();
-            beginSpawnNextPattern();
+            // Only commit if drop was pressed, not held
+            InputContext* pInput = &(g_GameState.InputContext);
+            if (InputHasEventPressed(pInput, INPUTEVENT_DOWN))
+            {
+                commitCurrentPattern();
+                beginSpawnNextPattern();
+            }
         }
         else if (g_GameState.lockBeginFrame == 0)
         {
@@ -816,32 +993,6 @@ void updateGameState()
                 beginSpawnNextPattern();
             }
         }
-    }
-
-    // Check losing condition
-    if (g_GameState.isGameOver)
-    {
-        // Just clear all lines on lose
-        for (Uint8 y = 0; y < GRID_HEIGHT; ++y)
-        {
-            g_GameState.clearLines[y] = y;
-        }
-
-        g_GameState.clearLinesFrame = g_GameState.currentFrame;
-        g_GameState.currentFrame++;
-
-        // Reset stats and level on loss
-        g_GameState.totalClearedLines = 0;
-        g_GameState.currentLevel = 1;
-        g_GameState.pCurrentTheme = g_DefaultThemes;
-        g_GameState.dropSpeed = START_DROP_SPEED;
-        g_GameState.holdPatternType = PATTERN_NONE;
-        g_GameState.currentPatternType = popFromNextQueue();
-        initializeNextQueue();
-
-        // TODO: do this elsewhere?
-        g_GameState.isGameOver = false;
-        return;
     }
 
     // Checking cleared lines or lose condition if there was a drop
@@ -888,12 +1039,14 @@ void updateGameState()
             if (g_GameState.currentLevel > previousLevel)
             {
                 // Level up!
-                g_GameState.pCurrentTheme =
-                    ThemeGetNextTheme(g_GameState.pCurrentTheme);
+                //
+                // Just stick with the default theme, it's a winner.
+                // g_GameState.pCurrentTheme =
+                //     ThemeGetNextTheme(g_GameState.pCurrentTheme);
+                g_GameState.levelUpFrame = g_GameState.currentFrame;
             }
         }
     }
-
 
     g_GameState.currentFrame++;
 }
@@ -955,9 +1108,53 @@ renderCellArray(
     SDL_RenderFillRects(pRenderer, pRects, numRects);
 }
 
+void 
+renderCellArrayBlendColor(
+    SDL_Renderer* pRenderer,
+    PatternType_t patternType,
+    SDL_Rect* pRects,
+    int numRects,
+    Color* pColorBlend,
+    float blendAlpha)
+{
+    // Outer
+    Color* pOuterColor = 
+        ThemeGetOuterColor(g_GameState.pCurrentTheme, (int)patternType);
+    Color outer = ThemeBlendColor(pOuterColor, pColorBlend, blendAlpha);
+
+    SDL_SetRenderDrawColor(
+        pRenderer,
+        outer.r,
+        outer.g,
+        outer.b,
+        SDL_ALPHA_OPAQUE);
+    SDL_RenderFillRects(pRenderer, pRects, numRects);
+
+    // Inner
+    for (int i = 0; i < numRects; ++i)
+    {
+        SDL_Rect* pRect = &pRects[i];
+        pRect->x += GRID_CELL_BORDER;
+        pRect->y += GRID_CELL_BORDER;
+        pRect->w -= (GRID_CELL_BORDER * 2);
+        pRect->h -= (GRID_CELL_BORDER * 2);
+    }
+    
+    Color* pInnerColor = 
+        ThemeGetInnerColor(g_GameState.pCurrentTheme, (int)patternType);
+    Color inner = ThemeBlendColor(pInnerColor, pColorBlend, blendAlpha);
+    SDL_SetRenderDrawColor(
+        pRenderer,
+        inner.r,
+        inner.g,
+        inner.b,
+        SDL_ALPHA_OPAQUE);
+    SDL_RenderFillRects(pRenderer, pRects, numRects);
+}
+
 void renderShadowPattern(SDL_Renderer* pRenderer)
 {
-    if (!g_GameState.renderCells)
+    if (!g_GameState.renderCells || g_GameState.isGameOver)
     {
         return;
     }
@@ -993,8 +1190,8 @@ void renderShadowPattern(SDL_Renderer* pRenderer)
 
     int toDrawIndex = 0;
     SDL_Rect toDraw[4];
-    for (int y = 0; y < pPattern->rows; ++y) {
-        for (int x = 0; x < pPattern->cols; ++x) {
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
             if (pPattern->occupancy[y][x])
             {
                 SDL_Rect* pRect = &toDraw[toDrawIndex];
@@ -1022,7 +1219,7 @@ void renderShadowPattern(SDL_Renderer* pRenderer)
 
 void renderCurrentPattern(SDL_Renderer* pRenderer)
 {
-    if (!g_GameState.renderCells)
+    if (!g_GameState.renderCells || g_GameState.isGameOver)
     {
         return;
     }
@@ -1036,8 +1233,8 @@ void renderCurrentPattern(SDL_Renderer* pRenderer)
 
     int toDrawIndex = 0;
     SDL_Rect toDraw[4];
-    for (int y = 0; y < pPattern->rows; ++y) {
-        for (int x = 0; x < pPattern->cols; ++x) {
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
             if (pPattern->occupancy[y][x])
             {
                 const int GridX = x + g_GameState.patternGridX;
@@ -1114,8 +1311,8 @@ void renderNextPattern(SDL_Renderer* pRenderer, PatternType_t patternType, int b
     
     int toDrawIndex = 0;
     SDL_Rect toDraw[4];
-    for (int y = 0; y < pPattern->rows; ++y) {
-        for (int x = 0; x < pPattern->cols; ++x) {
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
             if (pPattern->occupancy[y][x])
             {
                 SDL_Rect* pRect = &toDraw[toDrawIndex];
@@ -1239,8 +1436,8 @@ void renderHoldPattern(SDL_Renderer* pRenderer)
     
     int toDrawIndex = 0;
     SDL_Rect toDraw[4];
-    for (int y = 0; y < pPattern->rows; ++y) {
-        for (int x = 0; x < pPattern->cols; ++x) {
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
             if (pPattern->occupancy[y][x])
             {
                 SDL_Rect* pRect = &toDraw[toDrawIndex];
@@ -1377,6 +1574,88 @@ void renderIntroText(SDL_Renderer* pRenderer)
     }
 }
 
+void renderGameOverText(SDL_Renderer* pRenderer)
+{
+    const int GameOverFrames =
+        g_GameState.currentFrame - g_GameState.gameOverFrame;
+    if (g_GameState.isGameOver)
+    {
+        if (GameOverFrames >= GAMEOVER_SHOW_GAMEOVER_FRAMES)
+        {
+            if (g_GameState.hGameOverText == TEXT_INVALID_HANDLE)
+            {
+                g_GameState.hGameOverText = TextCreateEntry();
+                assert(g_GameState.hGameOverText != TEXT_INVALID_HANDLE);
+            }
+
+            TextSetEntryData(
+                g_GameState.hGameOverText,
+                pRenderer,
+                "GAME OVER");
+            if (!TextDrawEntry(
+                    g_GameState.hGameOverText,
+                    pRenderer,
+                    GAMEOVER_LOC_X,
+                    GAMEOVER_LOC_Y))
+            {
+                fprintf(stderr, "Failed to draw intro text\n");
+            }
+        }
+        
+        if (GameOverFrames >= GAMEOVER_SHOW_RETRY_FRAMES)
+        {
+            if (g_GameState.hRetryText == TEXT_INVALID_HANDLE)
+            {
+                g_GameState.hRetryText = TextCreateEntry();
+                assert(g_GameState.hRetryText != TEXT_INVALID_HANDLE);
+            }
+
+            TextSetEntryData(
+                g_GameState.hRetryText,
+                pRenderer,
+                "PRESS 'J' TO TRY AGAIN");
+            if (!TextDrawEntry(
+                    g_GameState.hRetryText,
+                    pRenderer,
+                    RETRY_LOC_X,
+                    RETRY_LOC_Y))
+            {
+                fprintf(stderr, "Failed to draw intro text\n");
+            }
+        }
+    }
+}
+
+void renderLevelUpText(SDL_Renderer* pRenderer)
+{
+    const int LevelUpFrames =
+        g_GameState.currentFrame - g_GameState.levelUpFrame;
+    if (g_GameState.levelUpFrame > 0)
+    {
+        if (LevelUpFrames <= LEVELUP_TEXT_DURATION_FRAMES)
+        {
+            if (g_GameState.hLevelUpText == TEXT_INVALID_HANDLE)
+            {
+                g_GameState.hLevelUpText = TextCreateEntry();
+                assert(g_GameState.hLevelUpText != TEXT_INVALID_HANDLE);
+            }
+
+            TextSetEntryData(
+                g_GameState.hLevelUpText,
+                pRenderer,
+                "LEVEL UP!");
+            if (!TextDrawEntry(
+                    g_GameState.hLevelUpText,
+                    pRenderer,
+                    LEVELUP_LOC_X,
+                    LEVELUP_LOC_Y))
+            {
+                fprintf(stderr, "Failed to draw intro text\n");
+            }
+        }
+    }
+}
+
 void renderGrid(SDL_Renderer* pRenderer) 
 {
     // Reset the rect array rect counts
@@ -1418,13 +1697,28 @@ void renderGrid(SDL_Renderer* pRenderer)
     }
 
     for (int rectType = 0; rectType < (int)PATTERN_MAX_VALUE; ++rectType) {
+        // Blend color dynamically according to level up presentation
+        const int LevelUpDuration = 
+            g_GameState.currentFrame - g_GameState.levelUpFrame;
+        float alpha = 0.f;
+        if (g_GameState.levelUpFrame > 0 && 
+            LevelUpDuration <= LEVELUP_ANIM_DURATION_FRAMES)
+        {
+            alpha = (float)LevelUpDuration * 0.2f / LEVELUP_ANIM_DURATION_FRAMES;
+        }
+        Color blendColor;
+        
+
+        Color kWhite = { 255, 255, 255 };
         SDLRectArray* pArray = &g_RectArrays.RectArrays[rectType];
-        renderCellArray(
+        renderCellArrayBlendColor(
             pRenderer,
             rectType,
             pArray->Rects,
             pArray->NumRects,
-            NULL, NULL);
+            &kWhite,
+            alpha
+        );
     }
 }
 
@@ -1496,6 +1790,10 @@ int main(int argc, char** argv)
 
         resetInputStates();
 
+        // Main loop
+        Uint64 startTime = SDL_GetPerformanceCounter();
+
+        // Pump events, gotta do this before polling input
         SDL_Event event;
         while(SDL_PollEvent(&event) != 0)
         {
@@ -1503,61 +1801,26 @@ int main(int argc, char** argv)
             {
                 shouldQuit = true;
             }
-            else if (event.type == SDL_KEYDOWN)
-            {
-                if (event.key.keysym.sym == SDLK_ESCAPE || 
-                    event.key.keysym.sym == SDLK_q)
-                {
-                    shouldQuit = true;
-                }
-                else if (event.key.keysym.sym == SDLK_w || 
-                         event.key.keysym.sym == SDLK_UP)
-                {
-                    g_GameState.inputUpPressed = true;
-                }
-                else if (event.key.keysym.sym == SDLK_s || 
-                         event.key.keysym.sym == SDLK_DOWN)
-                {
-                    g_GameState.inputDownPressed = true;
-                }
-                else if (event.key.keysym.sym == SDLK_a || 
-                         event.key.keysym.sym == SDLK_LEFT)
-                {
-                    g_GameState.inputLeftPressed = true;
-                }
-                else if (event.key.keysym.sym == SDLK_d || 
-                         event.key.keysym.sym == SDLK_RIGHT)
-                {
-                    g_GameState.inputRightPressed = true;
-                }
-                else if (event.key.keysym.sym == SDLK_k)
-                {
-                    g_GameState.inputRotateRightPressed = true;
-                }
-                else if (event.key.keysym.sym == SDLK_j)
-                {
-                    g_GameState.inputRotateLeftPressed = true;
-                }
-                else if (event.key.keysym.sym == SDLK_SPACE)
-                {
-                    if (g_GameState.isIntro)
-                    {
-                        g_GameState.isIntro = false;
-                    }
-                    else
-                    {
-                        g_GameState.inputHoldPiece = true;
-                    }
-                }
-                else if (event.key.keysym.sym == SDLK_p)
-                {
-                    g_GameState.inputPauseGame = true;
-                }
-            }
         }
 
-        // Main loop
-        Uint64 startTime = SDL_GetPerformanceCounter();
+        InputContext* pInput = &(g_GameState.InputContext);
+        InputUpdateContext(pInput);
+
+        shouldQuit = InputHasEventPressed(pInput, INPUTEVENT_QUIT);
+        g_GameState.inputUpPressed = InputHasEventPressed(pInput, INPUTEVENT_UP);
+        g_GameState.inputDownPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_DOWN);
+        g_GameState.inputLeftPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_LEFT);
+        g_GameState.inputRightPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_RIGHT);
+        g_GameState.inputRotateRightPressed = InputHasEventPressed(pInput, INPUTEVENT_ROTATERIGHT);
+        g_GameState.inputRotateLeftPressed = InputHasEventPressed(pInput, INPUTEVENT_ROTATELEFT);
+        g_GameState.inputHoldPiece = InputHasEventPressed(pInput, INPUTEVENT_HOLD);
+        g_GameState.inputPauseGame = InputHasEventPressed(pInput, INPUTEVENT_PAUSE);
+        g_GameState.inputBeginGame = InputHasEventPressed(pInput, INPUTEVENT_BEGINGAME);
+        g_GameState.inputRetryGame = InputHasEventPressed(pInput, INPUTEVENT_ROTATELEFT);
+
+        g_GameState.inputHoldPiece &= !g_GameState.isIntro;
+        g_GameState.inputRetryGame &= g_GameState.isGameOver;
+
 
         if (!g_GameState.isIntro)
         {
@@ -1576,6 +1839,8 @@ int main(int argc, char** argv)
         renderStats(pRender);
         renderPauseText(pRender);
         renderIntroText(pRender);
+        renderGameOverText(pRender);
+        renderLevelUpText(pRender);
 
         Uint8 GridBaseX;
         Uint8 GridBaseY;

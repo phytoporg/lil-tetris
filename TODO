@@ -1,9 +1,4 @@
-- implement custom key repeat
-- create a real game over sequence
-
-- can't spin pieces against flat lines (?)
-- add mute input
-- get rid of themes altogether
+- Stop BG music on game over, maybe game over music/sfx?
 
 POLISH
 - Committing pieces
@@ -13,4 +8,7 @@ POLISH
 -- Thematically-appropriate particles systems?
 
 - Level up
--- Animated "level up!" text
+-- *Animated* "level up!" text
+
+- Some kind of stage bg
+-- Thematically-appropriate particles systems? Fun repetitive patterns?

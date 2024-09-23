@@ -15,7 +15,7 @@ typedef struct
 typedef Uint8 HTEXT;
 
 #define TEXT_FONT "pixel_digivolve.otf"
-#define TEXT_MAX_ENTRIES 8
+#define TEXT_MAX_ENTRIES 12
 #define TEXT_INVALID_HANDLE 255
 
 static TextEntry_t g_TextEntries[TEXT_MAX_ENTRIES];
