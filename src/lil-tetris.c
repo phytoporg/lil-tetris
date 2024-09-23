@@ -876,7 +876,20 @@ void updateGameState()
                     // Copy each line "down" one
                     for (int x = 0; x < GRID_WIDTH; ++x)
                     {
-                        g_Grid[j + 1][x].patternType = g_Grid[j][x].patternType;
+                        if (j == -1)
+                        {
+                            // Always "copy" null patterns from above the grid
+                            g_Grid[j + 1][x].patternType = PATTERN_NONE;
+                        }
+                        else if (j >= 0)
+                        {
+                            g_Grid[j + 1][x].patternType = g_Grid[j][x].patternType;
+                        }
+                        else
+                        {
+                            // Shouldn't get here
+                            assert(false);
+                        }
                     }
                 }
             }
