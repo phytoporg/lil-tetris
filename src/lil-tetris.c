@@ -61,6 +61,8 @@
 #define CLEAR_LINES_FRAMES 15
 #define CLEAR_LINES_FLASH_DURATION 10
 
+#define GAMEOVER_ANIM_DURATION_FRAMES 60
+
 #define LOCK_DELAY_FRAMES 60
 
 #define START_DROP_SPEED 2
@@ -106,6 +108,7 @@ typedef struct
     Uint64     preSpawnFrame;
     Uint64     lastSpawnFrame;
     Uint64     lockBeginFrame;
+    Uint64     gameOverFrame;
     Uint8      dropSpeed;
     Sint8      clearLines[GRID_HEIGHT];
     Uint64     clearLinesFrame;
@@ -294,6 +297,7 @@ void initializeGameState()
     g_GameState.preSpawnFrame = 0;
     g_GameState.lastSpawnFrame = 0;
     g_GameState.lockBeginFrame = 0;
+    g_GameState.gameOverFrame = 0;
     g_GameState.dropSpeed = START_DROP_SPEED; // Drops per second
     memset(g_GameState.clearLines, -1, sizeof(g_GameState.clearLines));
     g_GameState.clearLinesFrame = 0;
@@ -505,6 +509,11 @@ bool isLineBeingCleared(Sint8 gridY)
 
 void commitCurrentPattern()
 {
+    if (g_GameState.isGameOver)
+    {
+        return;
+    }
+
     Pattern* pPattern = getCurrentPattern();
     for (int y = 0; y < 4; ++y) {
         for (int x = 0; x < 4; ++x) {
@@ -517,7 +526,8 @@ void commitCurrentPattern()
                 {
                     // If we commit any cells above the grid, the game is over
                     g_GameState.isGameOver = true;
-                    continue;
+                    g_GameState.gameOverFrame = g_GameState.currentFrame;
+                    return;
                 }
 
                 g_Grid[gridY][gridX].patternType = g_GameState.currentPatternType;
@@ -747,7 +757,57 @@ void updateGameState()
         return;
     }
 
-    g_GameState.renderCells = true;
+    // Check losing condition
+    if (g_GameState.isGameOver)
+    {
+        g_GameState.preSpawnFrame = 0;
+
+        // Start blowing up lines
+        const int GameOverFrames =
+            g_GameState.currentFrame - g_GameState.gameOverFrame;
+        const int LineToClear = 
+            ((float)GameOverFrames / GAMEOVER_ANIM_DURATION_FRAMES) *
+            GRID_HEIGHT - 1;
+
+        bool hasClearedThisLine = true;
+        for (int x = 0; x < GRID_WIDTH; ++x) {
+            if (g_Grid[LineToClear][x].patternType != PATTERN_NONE)
+            {
+                hasClearedThisLine = false;
+                break;
+            }
+        }
+
+        if (!hasClearedThisLine)
+        {
+            emitLineClearParticles(LineToClear);
+            for (int x = 0; x < GRID_WIDTH; ++x) {
+                g_Grid[LineToClear][x].patternType = PATTERN_NONE;
+            }
+        }
+
+        // We done?
+        if (GameOverFrames >= GAMEOVER_ANIM_DURATION_FRAMES)
+        {
+            // Reset stats and level on loss
+            g_GameState.totalClearedLines = 0;
+            g_GameState.currentLevel = 1;
+            g_GameState.pCurrentTheme = g_DefaultThemes;
+            g_GameState.dropSpeed = START_DROP_SPEED;
+            g_GameState.holdPatternType = PATTERN_NONE;
+            g_GameState.currentPatternType = popFromNextQueue();
+            initializeNextQueue();
+
+            beginSpawnNextPattern();
+            g_GameState.isGameOver = false;
+            g_GameState.renderCells = true;
+        }
+        else
+        {
+            g_GameState.currentFrame++;
+            return;
+        }
+    }
 
     if (waitingToSpawn())
     {
@@ -756,7 +816,6 @@ void updateGameState()
     }
     else if (isSpawnFrame())
     {
-        commitCurrentPattern();
         spawnNextPattern();
     }
 
@@ -768,7 +827,7 @@ void updateGameState()
         if (sinceClearedLines >= CLEAR_LINES_FRAMES)
         {
             // Collapse cleared lines
-            for (Sint8 i = 0; i < sizeof(g_GameState.clearLines); ++i)
+            for (Sint8 i = 0; i < GRID_HEIGHT; ++i)
             {
                 Sint8 y = g_GameState.clearLines[i];
                 if (y < 0)
@@ -792,6 +851,8 @@ void updateGameState()
         g_GameState.currentFrame++;
         return;
     }
+
+    g_GameState.renderCells = true;
 
     // Check for natural drops, player-induced drops or quick drops
     if (g_GameState.inputUpPressed)
@@ -904,32 +965,6 @@ void updateGameState()
                 beginSpawnNextPattern();
             }
         }
-    }
-
-    // Check losing condition
-    if (g_GameState.isGameOver)
-    {
-        // Just clear all lines on lose
-        for (Uint8 y = 0; y < GRID_HEIGHT; ++y)
-        {
-            g_GameState.clearLines[y] = y;
-        }
-
-        g_GameState.clearLinesFrame = g_GameState.currentFrame;
-        g_GameState.currentFrame++;
-
-        // Reset stats and level on loss
-        g_GameState.totalClearedLines = 0;
-        g_GameState.currentLevel = 1;
-        g_GameState.pCurrentTheme = g_DefaultThemes;
-        g_GameState.dropSpeed = START_DROP_SPEED;
-        g_GameState.holdPatternType = PATTERN_NONE;
-        g_GameState.currentPatternType = popFromNextQueue();
-        initializeNextQueue();
-
-        // TODO: do this elsewhere?
-        g_GameState.isGameOver = false;
-        return;
     }
 
     // Checking cleared lines or lose condition if there was a drop
@@ -1045,7 +1080,7 @@ renderCellArray(
 
 void renderShadowPattern(SDL_Renderer* pRenderer)
 {
-    if (!g_GameState.renderCells)
+    if (!g_GameState.renderCells || g_GameState.isGameOver)
     {
         return;
     }
@@ -1110,7 +1145,7 @@ void renderShadowPattern(SDL_Renderer* pRenderer)
 
 void renderCurrentPattern(SDL_Renderer* pRenderer)
 {
-    if (!g_GameState.renderCells)
+    if (!g_GameState.renderCells || g_GameState.isGameOver)
     {
         return;
     }
@@ -1610,6 +1645,8 @@ int main(int argc, char** argv)
         g_GameState.inputHoldPiece = InputHasEventPressed(pInput, INPUTEVENT_HOLD);
         g_GameState.inputPauseGame = InputHasEventPressed(pInput, INPUTEVENT_PAUSE);
         g_GameState.inputBeginGame = InputHasEventPressed(pInput, INPUTEVENT_BEGINGAME);
+
+        g_GameState.inputHoldPiece &= !g_GameState.isIntro;
 
 
         if (!g_GameState.isIntro)

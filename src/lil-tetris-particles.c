@@ -3,7 +3,7 @@
 #include <assert.h>
 
 // Should be way more than we need
-#define MAX_PARTICLES 255
+#define MAX_PARTICLES 2048
 
 typedef enum
 {
@@ -25,7 +25,7 @@ typedef struct {
     SquareParticle_t Particles[MAX_PARTICLES];
     bool             Valid[MAX_PARTICLES];
     bool             Initialized;
-    Uint8            Count;
+    Uint16           Count;
 } ParticleSystem_t;
 
 void ParticleSystemInitialize(
@@ -55,8 +55,8 @@ SquareParticle_t* ParticleSystemMakeParticle(ParticleSystem_t* pParticleSystem)
     }
 
     // Find the next available particle slot
-    Sint8 nextParticleIndex = -1;
-    for (Uint8 i = 0; i < MAX_PARTICLES; ++i)
+    Sint16 nextParticleIndex = -1;
+    for (Uint16 i = 0; i < MAX_PARTICLES; ++i)
     {
         if (!pParticleSystem->Valid[i])
         {
@@ -86,8 +86,8 @@ void ParticleSystemTick(ParticleSystem_t* pParticleSystem)
 {
     assert(pParticleSystem->Initialized);
 
-    Sint8 particlesRemaining = pParticleSystem->Count;
-    Uint8 index = 0;
+    Sint16 particlesRemaining = pParticleSystem->Count;
+    Uint16 index = 0;
     while(particlesRemaining > 0)
     {
         if (pParticleSystem->Valid[index])
@@ -131,8 +131,8 @@ void ParticleSystemRender(
 {
     assert(pParticleSystem->Initialized);
 
-    Sint8 particlesRemaining = pParticleSystem->Count;
-    Uint8 index = 0;
+    Sint16 particlesRemaining = pParticleSystem->Count;
+    Uint16 index = 0;
     while(particlesRemaining > 0)
     {
         if (pParticleSystem->Valid[index])
