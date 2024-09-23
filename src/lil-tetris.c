@@ -812,14 +812,6 @@ void updateGameState()
         // We done?
         if (GameOverFrames == GAMEOVER_ANIM_DURATION_FRAMES)
         {
-            // Reset stats and level on loss
-            g_GameState.totalClearedLines = 0;
-            g_GameState.currentLevel = 1;
-            g_GameState.pCurrentTheme = g_DefaultThemes;
-            g_GameState.dropSpeed = START_DROP_SPEED;
-            g_GameState.holdPatternType = PATTERN_NONE;
-
-            beginSpawnNextPattern();
         }
 
         if (GameOverFrames >= GAMEOVER_SHOW_RETRY_FRAMES &&
@@ -830,6 +822,14 @@ void updateGameState()
 
             initializeNextQueue();
             g_GameState.currentPatternType = popFromNextQueue();
+
+            // Reset stats and level
+            g_GameState.totalClearedLines = 0;
+            g_GameState.currentLevel = 1;
+            g_GameState.pCurrentTheme = g_DefaultThemes;
+            g_GameState.dropSpeed = START_DROP_SPEED;
+            g_GameState.holdPatternType = PATTERN_NONE;
+
             spawnNextPattern();
         }
 
