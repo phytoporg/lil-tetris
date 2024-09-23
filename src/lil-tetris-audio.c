@@ -105,6 +105,14 @@ void AudioResumeMusic()
     }
 }
 
+void AudioStopMusic()
+{
+    if (Mix_PlayingMusic())
+    {
+        Mix_HaltMusic();
+    }
+}
+
 bool AudioPlayLineClear()
 {
     if (!g_pLineClearChunk)

@@ -621,6 +621,12 @@ void checkInputs()
         return;
     }
 
+    // Ignroe inputs if the game is over
+    if (g_GameState.isGameOver)
+    {
+        return;
+    }
+
     // Handle player inputs
     Pattern* pPattern = getCurrentPattern();
     if (g_GameState.inputLeftPressed && !g_GameState.inputRightPressed)
@@ -783,6 +789,8 @@ void updateGameState()
     // Check losing condition
     if (g_GameState.isGameOver)
     {
+        AudioStopMusic();
+
         g_GameState.preSpawnFrame = 0;
 
         // Start blowing up lines
@@ -809,11 +817,7 @@ void updateGameState()
             }
         }
 
-        // We done?
-        if (GameOverFrames == GAMEOVER_ANIM_DURATION_FRAMES)
-        {
-        }
-
+        // Handle reset input
         if (GameOverFrames >= GAMEOVER_SHOW_RETRY_FRAMES &&
             g_GameState.inputRetryGame)
         {
@@ -831,6 +835,10 @@ void updateGameState()
             g_GameState.holdPatternType = PATTERN_NONE;
 
             spawnNextPattern();
+
+            // Get the music goin' again
+            const bool Success = AudioPlayMusic();
+            assert(Success);
         }
 
         g_GameState.currentFrame++;
