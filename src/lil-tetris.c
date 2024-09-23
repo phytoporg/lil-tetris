@@ -51,6 +51,9 @@
 #define RETRY_LOC_X 155
 #define RETRY_LOC_Y 245
 
+#define LEVELUP_LOC_X 240
+#define LEVELUP_LOC_Y 240
+
 #define NEXT_PATTERN_TEXT_X 450
 #define NEXT_PATTERN_TEXT_Y 30
 #define NEXT_PATTERN_X 450
@@ -63,7 +66,7 @@
 #define HOLD_PATTERN_Y 50
 #define HOLD_PATTERN_BORDER 5
 
-#define SPAWN_DELAY_FRAMES 15
+#define SPAWN_DELAY_FRAMES 6
 #define CLEAR_LINES_FRAMES 15
 #define CLEAR_LINES_FLASH_DURATION 10
 
@@ -71,9 +74,12 @@
 #define GAMEOVER_SHOW_GAMEOVER_FRAMES 50
 #define GAMEOVER_SHOW_RETRY_FRAMES 90
 
+#define LEVELUP_ANIM_DURATION_FRAMES 15
+#define LEVELUP_TEXT_DURATION_FRAMES 70
+
 #define LOCK_DELAY_FRAMES 60
 
-#define START_DROP_SPEED 2
+#define START_DROP_SPEED 5
 
 #define NEXT_QUEUE_SIZE 4
 
@@ -115,6 +121,7 @@ typedef struct
     Uint64     lastDropFrame;
     Uint64     preSpawnFrame;
     Uint64     lastSpawnFrame;
+    Uint64     levelUpFrame;
     Uint64     lockBeginFrame;
     Uint64     gameOverFrame;
     Uint8      dropSpeed;
@@ -132,6 +139,7 @@ typedef struct
     HTEXT      hIntroText;
     HTEXT      hGameOverText;
     HTEXT      hRetryText;
+    HTEXT      hLevelUpText;
     bool       inputLeftPressed;
     bool       inputRightPressed;
     bool       inputDownPressed;
@@ -308,6 +316,7 @@ void initializeGameState()
     g_GameState.lastDropFrame = 0;
     g_GameState.preSpawnFrame = 0;
     g_GameState.lastSpawnFrame = 0;
+    g_GameState.levelUpFrame = 0;
     g_GameState.lockBeginFrame = 0;
     g_GameState.gameOverFrame = 0;
     g_GameState.dropSpeed = START_DROP_SPEED; // Drops per second
@@ -325,6 +334,7 @@ void initializeGameState()
     g_GameState.hIntroText = TEXT_INVALID_HANDLE;
     g_GameState.hGameOverText = TEXT_INVALID_HANDLE;
     g_GameState.hRetryText = TEXT_INVALID_HANDLE;
+    g_GameState.hLevelUpText = TEXT_INVALID_HANDLE;
     g_GameState.isPaused = false;
     g_GameState.isIntro = true;
     g_GameState.isGameOver = false;
@@ -1029,12 +1039,14 @@ void updateGameState()
             if (g_GameState.currentLevel > previousLevel)
             {
                 // Level up!
-                g_GameState.pCurrentTheme =
-                    ThemeGetNextTheme(g_GameState.pCurrentTheme);
+                //
+                // Just stick with the default theme, it's a winner.
+                // g_GameState.pCurrentTheme =
+                //     ThemeGetNextTheme(g_GameState.pCurrentTheme);
+                g_GameState.levelUpFrame = g_GameState.currentFrame;
             }
         }
     }
-
 
     g_GameState.currentFrame++;
 }
@@ -1092,6 +1104,50 @@ renderCellArray(
         pInnerColor->r,
         pInnerColor->g,
         pInnerColor->b,
+        SDL_ALPHA_OPAQUE);
+    SDL_RenderFillRects(pRenderer, pRects, numRects);
+}
+
+void 
+renderCellArrayBlendColor(
+    SDL_Renderer* pRenderer,
+    PatternType_t patternType,
+    SDL_Rect* pRects,
+    int numRects,
+    Color* pColorBlend,
+    float blendAlpha)
+{
+    // Outer
+    Color* pOuterColor = 
+        ThemeGetOuterColor(g_GameState.pCurrentTheme, (int)patternType);
+    Color outer = ThemeBlendColor(pOuterColor, pColorBlend, blendAlpha);
+
+    SDL_SetRenderDrawColor(
+        pRenderer,
+        outer.r,
+        outer.g,
+        outer.b,
+        SDL_ALPHA_OPAQUE);
+    SDL_RenderFillRects(pRenderer, pRects, numRects);
+
+    // Inner
+    for (int i = 0; i < numRects; ++i)
+    {
+        SDL_Rect* pRect = &pRects[i];
+        pRect->x += GRID_CELL_BORDER;
+        pRect->y += GRID_CELL_BORDER;
+        pRect->w -= (GRID_CELL_BORDER * 2);
+        pRect->h -= (GRID_CELL_BORDER * 2);
+    }
+    
+    Color* pInnerColor = 
+        ThemeGetInnerColor(g_GameState.pCurrentTheme, (int)patternType);
+    Color inner = ThemeBlendColor(pInnerColor, pColorBlend, blendAlpha);
+    SDL_SetRenderDrawColor(
+        pRenderer,
+        inner.r,
+        inner.g,
+        inner.b,
         SDL_ALPHA_OPAQUE);
     SDL_RenderFillRects(pRenderer, pRects, numRects);
 }
@@ -1570,6 +1626,36 @@ void renderGameOverText(SDL_Renderer* pRenderer)
     }
 }
 
+void renderLevelUpText(SDL_Renderer* pRenderer)
+{
+    const int LevelUpFrames =
+        g_GameState.currentFrame - g_GameState.levelUpFrame;
+    if (g_GameState.levelUpFrame > 0)
+    {
+        if (LevelUpFrames <= LEVELUP_TEXT_DURATION_FRAMES)
+        {
+            if (g_GameState.hLevelUpText == TEXT_INVALID_HANDLE)
+            {
+                g_GameState.hLevelUpText = TextCreateEntry();
+                assert(g_GameState.hLevelUpText != TEXT_INVALID_HANDLE);
+            }
+
+            TextSetEntryData(
+                g_GameState.hLevelUpText,
+                pRenderer,
+                "LEVEL UP!");
+            if (!TextDrawEntry(
+                    g_GameState.hLevelUpText,
+                    pRenderer,
+                    LEVELUP_LOC_X,
+                    LEVELUP_LOC_Y))
+            {
+                fprintf(stderr, "Failed to draw intro text\n");
+            }
+        }
+    }
+}
+
 void renderGrid(SDL_Renderer* pRenderer) 
 {
     // Reset the rect array rect counts
@@ -1611,13 +1697,28 @@ void renderGrid(SDL_Renderer* pRenderer)
     }
 
     for (int rectType = 0; rectType < (int)PATTERN_MAX_VALUE; ++rectType) {
+        // Blend color dynamically according to level up presentation
+        const int LevelUpDuration = 
+            g_GameState.currentFrame - g_GameState.levelUpFrame;
+        float alpha = 0.f;
+        if (g_GameState.levelUpFrame > 0 && 
+            LevelUpDuration <= LEVELUP_ANIM_DURATION_FRAMES)
+        {
+            alpha = (float)LevelUpDuration * 0.2f / LEVELUP_ANIM_DURATION_FRAMES;
+        }
+        Color blendColor;
+        
+
+        Color kWhite = { 255, 255, 255 };
         SDLRectArray* pArray = &g_RectArrays.RectArrays[rectType];
-        renderCellArray(
+        renderCellArrayBlendColor(
             pRenderer,
             rectType,
             pArray->Rects,
             pArray->NumRects,
-            NULL, NULL);
+            &kWhite,
+            alpha
+        );
     }
 }
 
@@ -1706,7 +1807,7 @@ int main(int argc, char** argv)
         InputUpdateContext(pInput);
 
         shouldQuit = InputHasEventPressed(pInput, INPUTEVENT_QUIT);
-        g_GameState.inputUpPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_UP);
+        g_GameState.inputUpPressed = InputHasEventPressed(pInput, INPUTEVENT_UP);
         g_GameState.inputDownPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_DOWN);
         g_GameState.inputLeftPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_LEFT);
         g_GameState.inputRightPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_RIGHT);
@@ -1739,6 +1840,7 @@ int main(int argc, char** argv)
         renderPauseText(pRender);
         renderIntroText(pRender);
         renderGameOverText(pRender);
+        renderLevelUpText(pRender);
 
         Uint8 GridBaseX;
         Uint8 GridBaseY;

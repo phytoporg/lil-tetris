@@ -1,11 +1,11 @@
-- Get rid of themes altogether
+- Stop BG music on game over, maybe game over music/sfx?
 
 POLISH
 - Committing pieces
 -- Add commit sfx
 
 - Level up
--- Animated "level up!" text
+-- *Animated* "level up!" text
 
 - Some kind of stage bg
--- Thematically-appropriate particles systems?
+-- Thematically-appropriate particles systems? Fun repetitive patterns?
