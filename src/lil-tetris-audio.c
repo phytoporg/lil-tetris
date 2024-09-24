@@ -5,9 +5,11 @@
 
 #define AUDIO_PATH_MUSIC "music.mp3"
 #define AUDIO_PATH_LINECLEAR "lineclear.mp3"
+#define AUDIO_PATH_GAMEOVER "gameover.mp3"
 
 static Mix_Music* g_pMusic = NULL;
 static Mix_Chunk* g_pLineClearChunk = NULL;
+static Mix_Chunk* g_pGameOverChunk = NULL;
 
 bool AudioInitialize(char* pAssetPathRoot)
 {
@@ -34,6 +36,7 @@ bool AudioInitialize(char* pAssetPathRoot)
     const int rootPathLen = strlen(pAssetPathRoot);
     const int musicPathLen = strlen(AUDIO_PATH_MUSIC);
     const int lineclearPathLen = strlen(AUDIO_PATH_LINECLEAR);
+    const int gameoverPathLen = strlen(AUDIO_PATH_GAMEOVER);
 
     if ((rootPathLen + musicPathLen + 1) >= sizeof(fullPath))
     {
@@ -42,6 +45,12 @@ bool AudioInitialize(char* pAssetPathRoot)
     }
 
     if ((rootPathLen + lineclearPathLen + 1) >= sizeof(fullPath))
+    {
+        fprintf(stderr, "lineclear file path is too long\n");
+        return false;
+    }
+
+    if ((rootPathLen + gameoverPathLen + 1) >= sizeof(fullPath))
     {
         fprintf(stderr, "lineclear file path is too long\n");
         return false;
@@ -63,11 +72,20 @@ bool AudioInitialize(char* pAssetPathRoot)
         return false;
     }
 
+    sprintf(fullPath, "%s/%s", pAssetPathRoot, AUDIO_PATH_GAMEOVER);
+    g_pGameOverChunk = Mix_LoadWAV(fullPath);
+    if (!g_pGameOverChunk)
+    {
+        fprintf(stderr, "Failed to load gameover sfx: %s\n", SDL_GetError());
+        return false;
+    }
+
     return true;
 }
 
 void AudioUninitialize()
 {
+    Mix_FreeChunk(g_pGameOverChunk);
     Mix_FreeChunk(g_pLineClearChunk);
     Mix_FreeMusic(g_pMusic);
     Mix_CloseAudio();
@@ -121,4 +139,14 @@ bool AudioPlayLineClear()
     }
 
     return Mix_PlayChannel(-1, g_pLineClearChunk, 0) >= 0;
+}
+
+bool AudioPlayGameOver()
+{
+    if (!g_pGameOverChunk)
+    {
+        return false;
+    }
+
+    return Mix_PlayChannel(-1, g_pGameOverChunk, 0) >= 0;
 }

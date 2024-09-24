@@ -624,7 +624,7 @@ void checkInputs()
         return;
     }
 
-    // Ignroe inputs if the game is over
+    // Ignore inputs if the game is over
     if (g_GameState.isGameOver)
     {
         return;
@@ -802,6 +802,12 @@ void updateGameState()
         const int LineToClear = 
             ((float)GameOverFrames / GAMEOVER_ANIM_DURATION_FRAMES) *
             GRID_HEIGHT - 1;
+
+        if (GameOverFrames == 1)
+        {
+            // Play game over sfx only on the first game over frame
+            AudioPlayGameOver();
+        }
 
         bool hasClearedThisLine = true;
         for (int x = 0; x < GRID_WIDTH && LineToClear < GRID_HEIGHT; ++x) {
