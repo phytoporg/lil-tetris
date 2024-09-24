@@ -25,6 +25,7 @@
 #define GRID_CELL_WIDTH 20
 #define GRID_CELL_HEIGHT 20
 #define GRID_CELL_BORDER 2
+#define GRID_BG_CELL_BORDER 1
 
 #define GRID_DISPLACE_AMOUNT 3
 #define GRID_DISPLACE_DURATION 3
@@ -447,6 +448,18 @@ Uint8 patternCollides(Pattern* pPattern, Sint8 dX, Sint8 dY)
     return collisionFlags;
 }
 
+int CellBorderFromType(PatternType_t patternType)
+{
+    if (patternType == PATTERN_NONE)
+    {
+        return GRID_BG_CELL_BORDER;
+    }
+    else
+    {
+        return GRID_CELL_BORDER;
+    }
+}
+
 bool 
 ResolveWallKick(
     WallKickRotateDirection rotateDirection,
@@ -587,7 +600,8 @@ void getGridPosition(Uint8* pXOut, Uint8* pYOut)
 {
     Uint64 sincePreSpawn = g_GameState.currentFrame - g_GameState.preSpawnFrame;
     Uint8 yOffset = 
-        (sincePreSpawn < GRID_DISPLACE_DURATION) ? GRID_DISPLACE_AMOUNT : 0;
+        (g_GameState.lastDropFrame > 0 && sincePreSpawn < GRID_DISPLACE_DURATION) ? 
+            GRID_DISPLACE_AMOUNT : 0;
 
     *pXOut = GRID_UPPER_X;
     *pYOut = GRID_UPPER_Y + yOffset;
@@ -1122,11 +1136,12 @@ renderCellArray(
     // Inner
     for (int i = 0; i < numRects; ++i)
     {
+        const int Border = CellBorderFromType(patternType);
         SDL_Rect* pRect = &pRects[i];
-        pRect->x += GRID_CELL_BORDER;
-        pRect->y += GRID_CELL_BORDER;
-        pRect->w -= (GRID_CELL_BORDER * 2);
-        pRect->h -= (GRID_CELL_BORDER * 2);
+        pRect->x += Border;
+        pRect->y += Border;
+        pRect->w -= (Border * 2);
+        pRect->h -= (Border * 2);
     }
     
     Color* pInnerColor = 
@@ -1166,11 +1181,12 @@ renderCellArrayBlendColor(
     // Inner
     for (int i = 0; i < numRects; ++i)
     {
+        const int Border = CellBorderFromType(patternType);
         SDL_Rect* pRect = &pRects[i];
-        pRect->x += GRID_CELL_BORDER;
-        pRect->y += GRID_CELL_BORDER;
-        pRect->w -= (GRID_CELL_BORDER * 2);
-        pRect->h -= (GRID_CELL_BORDER * 2);
+        pRect->x += Border;
+        pRect->y += Border;
+        pRect->w -= (Border * 2);
+        pRect->h -= (Border * 2);
     }
     
     Color* pInnerColor = 
@@ -1810,9 +1826,9 @@ int main(int argc, char** argv)
     initializeGrid();
 
     Color clearColor;
-    clearColor.r = 100;
-    clearColor.g = 100;
-    clearColor.b = 100;
+    clearColor.r = 0;
+    clearColor.g = 0;
+    clearColor.b = 0;
 
     bool shouldQuit = false;
     while (!shouldQuit)

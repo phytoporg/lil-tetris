@@ -14,14 +14,14 @@ typedef struct
 #define NUM_THEMES 8
 
 static PatternTheme g_DefaultThemes[NUM_THEMES] = {
-    { {  0,   0,   0}, {  0,  0,    0} }, // PATTERN_NONE
-    { {248,  120, 32}, {248, 216,  96} }, // PATTERN_L_L
-    { { 96,  96, 248}, {192, 192, 248} }, // PATTERN_L_R,
-    { {240,  24,  24}, {248, 104, 104} }, // PATTERN_Z_L,
-    { {  0, 160,   0}, {128, 248, 128} }, // PATTERN_Z_R,
-    { {216,  40, 216}, {248, 160, 248} }, // PATTERN_T_SHAPE,
-    { { 32, 200, 248}, {160, 248, 248} }, // PATTERN_LINE_SHAPE,
-    { {248, 208,   0}, {248, 248, 160} }, // PATTERN_SQUARE_SHAPE,
+    { { 50,   50,  50}, {  0,   0,   0} }, // PATTERN_NONE
+    { {248,  120,  32}, {248, 216,  96} }, // PATTERN_L_L
+    { { 96,   96, 248}, {192, 192, 248} }, // PATTERN_L_R,
+    { {240,   24,  24}, {248, 104, 104} }, // PATTERN_Z_L,
+    { {  0,  160,   0}, {128, 248, 128} }, // PATTERN_Z_R,
+    { {216,   40, 216}, {248, 160, 248} }, // PATTERN_T_SHAPE,
+    { { 32,  200, 248}, {160, 248, 248} }, // PATTERN_LINE_SHAPE,
+    { {248,  208,   0}, {248, 248, 160} }, // PATTERN_SQUARE_SHAPE,
 };
 
 static PatternTheme g_ForestThemes[NUM_THEMES] = {
