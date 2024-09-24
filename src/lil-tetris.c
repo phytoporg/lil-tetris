@@ -768,6 +768,13 @@ void emitLineClearParticles(Uint8 y)
 
     for (Sint8 x = 0; x < GRID_WIDTH; ++x)
     {
+        if (g_Grid[y][x].patternType == PATTERN_NONE)
+        {
+            // This effect is used in game over as well, and we don't
+            // want to emit bg-colored particles it just looks bad.
+            continue;
+        }
+
         SquareParticle_t* pNewParticle = 
             ParticleSystemMakeParticle(&(g_GameState.DropParticles));
         pNewParticle->X = x;
