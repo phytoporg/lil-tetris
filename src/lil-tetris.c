@@ -563,6 +563,8 @@ void commitCurrentPattern()
 
     g_GameState.lockBeginFrame = 0;
     g_GameState.hasDoneHold = false;
+
+    AudioPlayCommit();
 }
 
 void beginSpawnNextPattern()

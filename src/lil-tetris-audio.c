@@ -6,10 +6,12 @@
 #define AUDIO_PATH_MUSIC "music.mp3"
 #define AUDIO_PATH_LINECLEAR "lineclear.mp3"
 #define AUDIO_PATH_GAMEOVER "gameover.mp3"
+#define AUDIO_PATH_COMMIT "commit.mp3"
 
 static Mix_Music* g_pMusic = NULL;
 static Mix_Chunk* g_pLineClearChunk = NULL;
 static Mix_Chunk* g_pGameOverChunk = NULL;
+static Mix_Chunk* g_pCommitChunk = NULL;
 
 bool AudioInitialize(char* pAssetPathRoot)
 {
@@ -37,6 +39,7 @@ bool AudioInitialize(char* pAssetPathRoot)
     const int musicPathLen = strlen(AUDIO_PATH_MUSIC);
     const int lineclearPathLen = strlen(AUDIO_PATH_LINECLEAR);
     const int gameoverPathLen = strlen(AUDIO_PATH_GAMEOVER);
+    const int commitPathLen = strlen(AUDIO_PATH_COMMIT);
 
     if ((rootPathLen + musicPathLen + 1) >= sizeof(fullPath))
     {
@@ -52,7 +55,13 @@ bool AudioInitialize(char* pAssetPathRoot)
 
     if ((rootPathLen + gameoverPathLen + 1) >= sizeof(fullPath))
     {
-        fprintf(stderr, "lineclear file path is too long\n");
+        fprintf(stderr, "gameover file path is too long\n");
+        return false;
+    }
+
+    if ((rootPathLen + commitPathLen + 1) >= sizeof(fullPath))
+    {
+        fprintf(stderr, "commit file path is too long\n");
         return false;
     }
 
@@ -77,6 +86,14 @@ bool AudioInitialize(char* pAssetPathRoot)
     if (!g_pGameOverChunk)
     {
         fprintf(stderr, "Failed to load gameover sfx: %s\n", SDL_GetError());
+        return false;
+    }
+
+    sprintf(fullPath, "%s/%s", pAssetPathRoot, AUDIO_PATH_COMMIT);
+    g_pCommitChunk = Mix_LoadWAV(fullPath);
+    if (!g_pCommitChunk)
+    {
+        fprintf(stderr, "Failed to load commit sfx: %s\n", SDL_GetError());
         return false;
     }
 
@@ -149,4 +166,14 @@ bool AudioPlayGameOver()
     }
 
     return Mix_PlayChannel(-1, g_pGameOverChunk, 0) >= 0;
+}
+
+bool AudioPlayCommit()
+{
+    if (!g_pCommitChunk)
+    {
+        return false;
+    }
+
+    return Mix_PlayChannel(-1, g_pCommitChunk, 0) >= 0;
 }
