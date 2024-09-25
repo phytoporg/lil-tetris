@@ -1261,8 +1261,8 @@ void renderShadowPattern(SDL_Renderer* pRenderer)
         }
     }
 
-    Color kShadowColorOuter = { 70, 5, 130 };
-    Color kShadowColorInner = { 30, 5, 40 };
+    Color kShadowColorOuter = { 80, 15, 150 };
+    Color kShadowColorInner = { 40, 15, 50 };
 
     assert(toDrawIndex == 4);
     renderCellArray(
