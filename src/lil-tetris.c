@@ -1904,7 +1904,12 @@ int main(int argc, char** argv)
         return -1;
     }
 
+#ifdef __EMSCRIPTEN__
+    char* pDefaultAssetRoot = "assets";
+#else
     char* pDefaultAssetRoot = ".";
+#endif
+
     char* pAssetRoot = (argc > 1 ? argv[1] : pDefaultAssetRoot);
     if (!AudioInitialize(pAssetRoot))
     {
