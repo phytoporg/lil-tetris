@@ -3,10 +3,10 @@
 #include <stdbool.h>
 #include <SDL2/SDL_mixer.h>
 
-#define AUDIO_PATH_MUSIC "music.mp3"
-#define AUDIO_PATH_LINECLEAR "lineclear.mp3"
-#define AUDIO_PATH_GAMEOVER "gameover.mp3"
-#define AUDIO_PATH_COMMIT "commit.mp3"
+#define AUDIO_PATH_MUSIC "music.wav"
+#define AUDIO_PATH_LINECLEAR "lineclear.wav"
+#define AUDIO_PATH_GAMEOVER "gameover.wav"
+#define AUDIO_PATH_COMMIT "commit.wav"
 
 static Mix_Music* g_pMusic = NULL;
 static Mix_Chunk* g_pLineClearChunk = NULL;
@@ -21,7 +21,7 @@ bool AudioInitialize(char* pAssetPathRoot)
         return false;
     }
 
-    if (Mix_Init(MIX_INIT_MP3) == 0)
+    if (Mix_Init(MIX_INIT_OGG) == 0)
     {
         fprintf(stderr, "Failed to initialize SDL Mixer: %s\n", SDL_GetError());
         return false;

@@ -1,3 +1,7 @@
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #include <SDL2/SDL.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -1782,29 +1786,119 @@ void renderGrid(SDL_Renderer* pRenderer)
     }
 }
 
+static SDL_Window* g_pWindow = NULL;
+static SDL_Renderer* g_pRender = NULL;
+static bool g_shouldQuit = false;
+
+static void mainloop()
+{
+    const Color ClearColor = { 0, 0, 0 };
+    SDL_SetRenderDrawColor(
+        g_pRender,
+        ClearColor.r,
+        ClearColor.g,
+        ClearColor.b,
+        SDL_ALPHA_OPAQUE);
+    SDL_RenderClear(g_pRender);
+
+    resetInputStates();
+
+    // Main loop
+    Uint64 startTime = SDL_GetPerformanceCounter();
+
+    // Pump events, gotta do this before polling input
+    SDL_Event event;
+    while(SDL_PollEvent(&event) != 0)
+    {
+        if (event.type == SDL_QUIT)
+        {
+            g_shouldQuit = true;
+        }
+    }
+
+    InputContext* pInput = &(g_GameState.InputContext);
+    InputUpdateContext(pInput);
+
+    g_shouldQuit = InputHasEventPressed(pInput, INPUTEVENT_QUIT);
+    g_GameState.inputUpPressed = InputHasEventPressed(pInput, INPUTEVENT_UP);
+    g_GameState.inputDownPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_DOWN);
+    g_GameState.inputLeftPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_LEFT);
+    g_GameState.inputRightPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_RIGHT);
+    g_GameState.inputRotateRightPressed = InputHasEventPressed(pInput, INPUTEVENT_ROTATERIGHT);
+    g_GameState.inputRotateLeftPressed = InputHasEventPressed(pInput, INPUTEVENT_ROTATELEFT);
+    g_GameState.inputHoldPiece = InputHasEventPressed(pInput, INPUTEVENT_HOLD);
+    g_GameState.inputPauseGame = InputHasEventPressed(pInput, INPUTEVENT_PAUSE);
+    g_GameState.inputBeginGame = InputHasEventPressed(pInput, INPUTEVENT_BEGINGAME);
+    g_GameState.inputRetryGame = InputHasEventPressed(pInput, INPUTEVENT_ROTATELEFT);
+
+    g_GameState.inputHoldPiece &= !g_GameState.isIntro;
+    g_GameState.inputRetryGame &= g_GameState.isGameOver;
+
+
+    if (!g_GameState.isIntro)
+    {
+        AudioPlayMusic();
+    }
+
+    updateGameState();
+    ParticleSystemTick(&(g_GameState.DropParticles));
+
+    checkInputs();
+    renderGrid(g_pRender);
+    renderShadowPattern(g_pRender);
+    renderCurrentPattern(g_pRender);
+    renderNextPatterns(g_pRender);
+    renderHoldPattern(g_pRender);
+    renderStats(g_pRender);
+    renderPauseText(g_pRender);
+    renderIntroText(g_pRender);
+    renderGameOverText(g_pRender);
+    renderLevelUpText(g_pRender);
+
+    Uint8 GridBaseX;
+    Uint8 GridBaseY;
+    getGridPosition(&GridBaseX, &GridBaseY);
+
+    const int LeftBound = GridBaseX;
+    const int RightBound = GridBaseX + GRID_WIDTH * GRID_CELL_WIDTH;
+    ParticleSystemRender(
+        &(g_GameState.DropParticles),
+        g_pRender,
+        LeftBound,
+        RightBound);
+
+    Uint64 endTime = SDL_GetPerformanceCounter();
+
+    float elapsedMs = (endTime - startTime) / 
+        (float)SDL_GetPerformanceFrequency() * 1000.0f; 
+    float expectedMs = (1.0f / FPS) * 1000.0f;
+
+    SDL_RenderPresent(g_pRender);
+    SDL_Delay(expectedMs - elapsedMs);
+
+}
+
 int main(int argc, char** argv)
 {
-    SDL_Window* pWindow = NULL;
-
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0)
     {
         fprintf(stderr, "Failed to initialize SDL2: %s\n", SDL_GetError());
         return -1;
     }
 
-    pWindow = SDL_CreateWindow(
+    SDL_Window* g_pWindow = SDL_CreateWindow(
             "lil-tetris",
             SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
             SCREEN_WIDTH, SCREEN_HEIGHT,
             SDL_WINDOW_SHOWN);
-    if (!pWindow)
+    if (!g_pWindow)
     {
         fprintf(stderr, "Failed to create window: %s\n", SDL_GetError());
         return -1;
     }
 
-    SDL_Renderer* pRender = SDL_CreateRenderer(pWindow, -1, SDL_RENDERER_ACCELERATED);
-    if (!pRender)
+    g_pRender = SDL_CreateRenderer(g_pWindow, -1, SDL_RENDERER_ACCELERATED);
+    if (!g_pRender)
     {
         fprintf(stderr, "Failed to create renderer: %s\n", SDL_GetError());
         return -1;
@@ -1818,7 +1912,7 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    if (!TextInitialize(pRender, pAssetRoot))
+    if (!TextInitialize(g_pRender, pAssetRoot))
     {
         fprintf(stderr, "Did not initialize text\n");
         return -1;
@@ -1832,103 +1926,20 @@ int main(int argc, char** argv)
     initializeGameState();
     initializeGrid();
 
-    Color clearColor;
-    clearColor.r = 0;
-    clearColor.g = 0;
-    clearColor.b = 0;
-
-    bool shouldQuit = false;
-    while (!shouldQuit)
+#ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop(mainloop, 0, 1);
+#else
+    while (!g_shouldQuit)
     {
-        SDL_SetRenderDrawColor(
-            pRender,
-            clearColor.r,
-            clearColor.g,
-            clearColor.b,
-            SDL_ALPHA_OPAQUE);
-        SDL_RenderClear(pRender);
-
-        resetInputStates();
-
-        // Main loop
-        Uint64 startTime = SDL_GetPerformanceCounter();
-
-        // Pump events, gotta do this before polling input
-        SDL_Event event;
-        while(SDL_PollEvent(&event) != 0)
-        {
-            if (event.type == SDL_QUIT)
-            {
-                shouldQuit = true;
-            }
-        }
-
-        InputContext* pInput = &(g_GameState.InputContext);
-        InputUpdateContext(pInput);
-
-        shouldQuit = InputHasEventPressed(pInput, INPUTEVENT_QUIT);
-        g_GameState.inputUpPressed = InputHasEventPressed(pInput, INPUTEVENT_UP);
-        g_GameState.inputDownPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_DOWN);
-        g_GameState.inputLeftPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_LEFT);
-        g_GameState.inputRightPressed = InputHasEventWithRepeat(pInput, INPUTEVENT_RIGHT);
-        g_GameState.inputRotateRightPressed = InputHasEventPressed(pInput, INPUTEVENT_ROTATERIGHT);
-        g_GameState.inputRotateLeftPressed = InputHasEventPressed(pInput, INPUTEVENT_ROTATELEFT);
-        g_GameState.inputHoldPiece = InputHasEventPressed(pInput, INPUTEVENT_HOLD);
-        g_GameState.inputPauseGame = InputHasEventPressed(pInput, INPUTEVENT_PAUSE);
-        g_GameState.inputBeginGame = InputHasEventPressed(pInput, INPUTEVENT_BEGINGAME);
-        g_GameState.inputRetryGame = InputHasEventPressed(pInput, INPUTEVENT_ROTATELEFT);
-
-        g_GameState.inputHoldPiece &= !g_GameState.isIntro;
-        g_GameState.inputRetryGame &= g_GameState.isGameOver;
-
-
-        if (!g_GameState.isIntro)
-        {
-            AudioPlayMusic();
-        }
-
-        updateGameState();
-        ParticleSystemTick(&(g_GameState.DropParticles));
-
-        checkInputs();
-        renderGrid(pRender);
-        renderShadowPattern(pRender);
-        renderCurrentPattern(pRender);
-        renderNextPatterns(pRender);
-        renderHoldPattern(pRender);
-        renderStats(pRender);
-        renderPauseText(pRender);
-        renderIntroText(pRender);
-        renderGameOverText(pRender);
-        renderLevelUpText(pRender);
-
-        Uint8 GridBaseX;
-        Uint8 GridBaseY;
-        getGridPosition(&GridBaseX, &GridBaseY);
-
-        const int LeftBound = GridBaseX;
-        const int RightBound = GridBaseX + GRID_WIDTH * GRID_CELL_WIDTH;
-        ParticleSystemRender(
-            &(g_GameState.DropParticles),
-            pRender,
-            LeftBound,
-            RightBound);
-
-        Uint64 endTime = SDL_GetPerformanceCounter();
-
-        float elapsedMs = (endTime - startTime) / 
-            (float)SDL_GetPerformanceFrequency() * 1000.0f; 
-        float expectedMs = (1.0f / FPS) * 1000.0f;
-
-        SDL_RenderPresent(pRender);
-        SDL_Delay(expectedMs - elapsedMs);
+        mainloop();
     }
 
     AudioUninitialize();
 
-    SDL_DestroyRenderer(pRender);
-    SDL_DestroyWindow(pWindow);
+    SDL_DestroyRenderer(g_pRender);
+    SDL_DestroyWindow(g_pWindow);
     SDL_Quit();
+#endif
 
     return 0;
 } 
