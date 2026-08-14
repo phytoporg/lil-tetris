@@ -7,11 +7,6 @@ if [[ -z "${BUILD_EMSCRIPTEN}" ]]; then
 else
     rm -rf embuild
     mkdir embuild
-    emcc src/lil-tetris.c --emrun -s USE_SDL=2 -s USE_SDL_TTF=2 -s USE_FREETYPE=1 -s USE_SDL_MIXER=2 -s TOTAL_MEMORY=1024MB --preload-file ./assets -o ./embuild/index.html
-
-    # The default emscripten template is uggers
-    if [ $? -eq 0 ]; then
-        cp ./wasm/index.html ./embuild
-    fi
+    emcc src/lil-tetris.c -Os --shell-file ./wasm/index.html -s USE_SDL=2 -s USE_SDL_TTF=2 -s USE_FREETYPE=1 -s USE_SDL_MIXER=2 -s TOTAL_MEMORY=1024MB -s ALLOW_MEMORY_GROWTH -s FORCE_FILESYSTEM=1 -s ASYNCIFY --preload-file ./assets -o ./embuild/index.html
 fi
 

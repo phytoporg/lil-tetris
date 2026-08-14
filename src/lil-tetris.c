@@ -117,7 +117,7 @@ typedef struct
     PatternType_t nextQueue[NEXT_QUEUE_SIZE];
     PatternType_t currentPatternType;
     PatternType_t holdPatternType;
-	PatternTheme* pCurrentTheme;
+    PatternTheme* pCurrentTheme;
     ParticleSystem_t DropParticles;
     ParticleSystem_t LineClearParticles;
     Sint8      patternGridX;
@@ -318,7 +318,7 @@ void initializeGameState()
 
     g_GameState.currentPatternType = popFromNextQueue();
     g_GameState.holdPatternType = PATTERN_NONE;
-	g_GameState.pCurrentTheme = g_DefaultThemes;
+    g_GameState.pCurrentTheme = g_DefaultThemes;
     g_GameState.currentPatternRotation = 0;
     g_GameState.currentFrame = 0;
     g_GameState.lastDropFrame = 0;
@@ -1323,7 +1323,9 @@ void renderCurrentPattern(SDL_Renderer* pRenderer)
         }
     }
 
+    Color blendedInner = {};
     Color* pInnerColor = NULL;
+    Color blendedOuter = {};
     Color* pOuterColor = NULL;
     if (waitingToSpawn())
     {
@@ -1336,17 +1338,13 @@ void renderCurrentPattern(SDL_Renderer* pRenderer)
         Uint64 sincePreSpawn = g_GameState.currentFrame - g_GameState.preSpawnFrame;
         float t = (float)sincePreSpawn / SPAWN_DELAY_FRAMES;
         const Color kWhite = { 255, 255, 255 };
-        Color blendedInner = {
-            kWhite.r * (1.0f - t) + pThemeInnerColor->r * t,
-            kWhite.g * (1.0f - t) + pThemeInnerColor->g * t,
-            kWhite.b * (1.0f - t) + pThemeInnerColor->b * t,
-        };
+        blendedInner.r = kWhite.r * (1.0f - t) + pThemeInnerColor->r * t,
+        blendedInner.g = kWhite.g * (1.0f - t) + pThemeInnerColor->g * t,
+        blendedInner.b = kWhite.b * (1.0f - t) + pThemeInnerColor->b * t,
 
-        Color blendedOuter = {
-            kWhite.r * (1.0f - t) + pThemeOuterColor->r * t,
-            kWhite.g * (1.0f - t) + pThemeOuterColor->g * t,
-            kWhite.b * (1.0f - t) + pThemeOuterColor->b * t,
-        };
+        blendedOuter.r = kWhite.r * (1.0f - t) + pThemeOuterColor->r * t,
+        blendedOuter.g = kWhite.g * (1.0f - t) + pThemeOuterColor->g * t,
+        blendedOuter.b = kWhite.b * (1.0f - t) + pThemeOuterColor->b * t,
 
         pInnerColor = &blendedInner;
         pOuterColor = &blendedOuter;
